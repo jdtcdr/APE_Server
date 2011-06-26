@@ -158,6 +158,11 @@ struct _ape_mysql_data {
 	} queue;
 };
 
+struct _ape_logfile_data {
+	FILE * fp;
+	char * filename;
+} 
+
 static void mysac_query_success(struct _ape_mysql_data *myhandle, int code);
 static struct _ape_mysql_queue *apemysql_push_queue(struct _ape_mysql_data *myhandle, char *query, unsigned int query_len, jsval callback);
 static void apemysql_shift_queue(struct _ape_mysql_data *myhandle);
@@ -274,6 +279,12 @@ static JSClass cmdresponse_class = {
 	    JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
+static JSClass logfile_class = {
+	"LogFile", JSCLASS_HAS_PRIVATE,
+	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
+	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, apelogfile_finalize,
+	    JSCLASS_NO_OPTIONAL_MEMBERS
+};
 
 APE_JS_NATIVE(apesocket_write)
 //{
@@ -1049,6 +1060,135 @@ APE_JS_NATIVE(apemysql_sm_query)
 }
 #endif
 
+APE_JS_NATIVE(apelogfile_constructor)
+//{
+	char *path;
+	char *value;
+	unsigned int val_len;
+	struct _ape_logfile_data *myhandle;
+	
+	if (!JS_ConvertArguments(cx, argc, argv, "s", &path)) {
+		*rval = JS_FALSE;
+		return JS_TRUE;
+	}
+
+        /* Disallow any . chars in path to restrict to permitted dir */
+        if (strchr(path, '.') != NULL) {
+		*rval = JS_FALSE;
+		return JS_FALSE;
+	}
+
+        /* Get the permitted dir from config */
+        value = ape_config_get_key(ape_config_get_section(g_ape->srv, "log"), "extra_logs_dir");
+
+        /* If no dir has been set then no log writing is allowed */
+        if (value == NULL) {
+		*rval = JS_FALSE;
+		return JS_TRUE;
+	}
+
+	myhandle = xmalloc(sizeof(*myhandle));
+
+	myhandle->fp = NULL;
+
+        /* Absolute paths must point to permitted dir */
+        val_len = strlen(value);
+        if (value[val_len-1] == '/') {
+		val_len--;
+	}
+        if (path[0] == '/') {
+		if (strlen(path) <= val_len || 
+		    strncmp(path, value, val_len) != 0 ||  
+		    path[val_len] != '/') {
+			*rval = JS_FALSE;
+			return JS_TRUE;
+		}
+		myhandle->filename = path;
+	} else {
+		myhandle->filename = xmalloc(val_len + strlen(path) + 2*sizeof(*value));
+		strncpy(myhandle->filename, value, val_len+1);
+		myhandle->filename[val_len] = '/'; // force to '/'
+		strcpy(myhandle->filename+val_len+1, path);
+	}
+
+        myhandle->fp = fopen(myhandle->filename, "a");
+        if (myhandle->fp == NULL) {
+		*rval = JS_FALSE;
+		return JS_TRUE;
+	}
+
+	JS_SetPrivate(cx, obj, myhandle);
+	
+	return JS_TRUE;
+}
+
+APE_JS_NATIVE(apelogfile_log)
+//{
+        char * msg;
+	struct _ape_logfile_data *myhandle;
+	
+	if ((myhandle = JS_GetPrivate(cx, obj)) == NULL) {
+		return JS_TRUE;
+	}
+
+	if (!JS_ConvertArguments(cx, argc, argv, "s", &msg)) {
+		*rval = JS_FALSE;
+		return JS_TRUE;
+	}
+
+        if (myhandle->fp == NULL) {
+		return JS_TRUE;
+	}
+
+        fwrite(msg, sizeof(*msg), strlen(msg), myhandle->fp);
+        fwrite("\n", sizeof(char), 1, myhandle->fp);
+
+        return JS_TRUE;
+}
+
+APE_JS_NATIVE(apelogfile_flush) 
+//{
+	struct _ape_logfile_data *myhandle;
+	
+	if ((myhandle = JS_GetPrivate(cx, obj)) == NULL) {
+		return JS_TRUE;
+	}
+
+        if (myhandle->fp != NULL) {
+		fflush(myhandle->fp);
+	}
+
+        return JS_TRUE;
+}
+
+APE_JS_NATIVE(apelogfile_close)
+//{
+	struct _ape_logfile_data *myhandle;
+	
+	if ((myhandle = JS_GetPrivate(cx, obj)) == NULL) {
+		return JS_TRUE;
+	}
+
+        if (myhandle->fp != NULL) {
+		fclose(myhandle->fp);
+		myhandle->fp = NULL;
+	}
+
+        return JS_TRUE;
+}
+
+static void apelogfile_finalize(JSContext *cx, JSObject *jslog)
+{
+	struct _ape_logfile_data *myhandle;
+
+	if ((myhandle = JS_GetPrivate(cx, jslog)) != NULL) {
+		if (myhandle->fp != NULL) {
+			fclose(myhandle->fp);
+		}
+		myhandle->fp = NULL;
+	}
+}
+
 static JSFunctionSpec apesocket_funcs[] = {
     	JS_FS("write",   apesocket_write,	1, 0, 0),
 	JS_FS("close",   apesocket_close,	0, 0, 0),
@@ -1126,6 +1266,13 @@ static JSFunctionSpec apepipecustom_funcs[] = {
 	JS_FS("destroy", apepipe_sm_destroy, 0, 0, 0),
 	JS_FS_END
 };
+
+static JSFunctionSpec apelogfile_funcs[] {
+	JS_FS("log", apelogfile_log, 1, 0, 0),
+	JS_FS("flush", apelogfile_flush, 0, 0, 0),
+	JS_FS("close", apelogfile_close, 0, 0, 0),
+	JS_FS_END
+}
 
 static JSObject *sm_ape_socket_to_jsobj(JSContext *cx, ape_socket *client)
 {
