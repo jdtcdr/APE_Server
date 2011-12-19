@@ -158,16 +158,18 @@ struct _ape_mysql_data {
 	} queue;
 };
 
-struct _ape_logfile_data {
-	FILE * fp;
-	char * filename;
-} 
-
 static void mysac_query_success(struct _ape_mysql_data *myhandle, int code);
 static struct _ape_mysql_queue *apemysql_push_queue(struct _ape_mysql_data *myhandle, char *query, unsigned int query_len, jsval callback);
 static void apemysql_shift_queue(struct _ape_mysql_data *myhandle);
 #endif
 //static JSBool sockserver_addproperty(JSContext *cx, JSObject *obj, jsval idval, jsval *vp);
+
+struct _ape_logfile_data {
+ 	FILE * fp;
+	char * filename;
+}; 
+
+static void apelogfile_finalize(JSContext *cx, JSObject *jslog);
 
 static ace_plugin_infos infos_module = {
 	"Javascript embeded", 	// Module Name
@@ -1267,12 +1269,12 @@ static JSFunctionSpec apepipecustom_funcs[] = {
 	JS_FS_END
 };
 
-static JSFunctionSpec apelogfile_funcs[] {
+static JSFunctionSpec apelogfile_funcs[] = {
 	JS_FS("log", apelogfile_log, 1, 0, 0),
 	JS_FS("flush", apelogfile_flush, 0, 0, 0),
 	JS_FS("close", apelogfile_close, 0, 0, 0),
 	JS_FS_END
-}
+};
 
 static JSObject *sm_ape_socket_to_jsobj(JSContext *cx, ape_socket *client)
 {
@@ -2821,7 +2823,7 @@ static JSFunctionSpec sha1_funcs[] = {
 
 static void ape_sm_define_ape(ape_sm_compiled *asc, JSContext *gcx, acetables *g_ape)
 {
-	JSObject *obj, *b64, *sha1, *sockclient, *sockserver, *custompipe, *user, *channel, *pipe, *subuser;
+  JSObject *obj, *b64, *sha1, *sockclient, *sockserver, *custompipe, *user, *channel, *pipe, *subuser, *logfile;
 	#ifdef _USE_MYSQL
 	JSObject *jsmysql;
 	#endif
@@ -2855,6 +2857,7 @@ static void ape_sm_define_ape(ape_sm_compiled *asc, JSContext *gcx, acetables *g
 	jsmysql = JS_InitClass(asc->cx, obj, NULL, &mysql_class, ape_sm_mysql_constructor, 2, NULL, NULL, NULL, apemysql_funcs_static);
 	#endif
 	JS_InitClass(asc->cx, obj, NULL, &raw_class, ape_sm_raw_constructor, 1, NULL, NULL, NULL, NULL); /* Not used */
+	logfile = JS_InitClass(asc->cx, obj, NULL, &logfile_class, apelogfile_constructor, 1, NULL, NULL, NULL, NULL);
 
 	JS_DefineFunctions(asc->cx, sockclient, apesocket_client_funcs);
 	JS_DefineFunctions(asc->cx, sockclient, apesocket_funcs);
@@ -2868,6 +2871,8 @@ static void ape_sm_define_ape(ape_sm_compiled *asc, JSContext *gcx, acetables *g
 	#ifdef _USE_MYSQL
 	JS_DefineFunctions(asc->cx, jsmysql, apemysql_funcs);
 	#endif
+
+	JS_DefineFunctions(asc->cx, logfile, apelogfile_funcs);
 	
 	JS_SetContextPrivate(asc->cx, asc);
 }
