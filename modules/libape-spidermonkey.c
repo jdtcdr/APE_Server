@@ -1069,13 +1069,18 @@ APE_JS_NATIVE(apelogfile_constructor)
 	unsigned int val_len;
 	struct _ape_logfile_data *myhandle;
 	
-	if (!JS_ConvertArguments(cx, argc, argv, "s", &path)) {
+	if (!JS_ConvertArguments(cx, 1, argv, "s", &path)) {
 		*rval = JS_FALSE;
-		return JS_TRUE;
+		return JS_FALSE;
 	}
+
+        ape_log(APE_DEBUG, __FILE__, __LINE__, g_ape, 
+		"LogFile : constructor called with '%s'", path);
 
         /* Disallow any . chars in path to restrict to permitted dir */
         if (strchr(path, '.') != NULL) {
+		ape_log(APE_ERR, __FILE__, __LINE__, g_ape, 
+			"LogFile : Illegal . character in logfile name");
 		*rval = JS_FALSE;
 		return JS_FALSE;
 	}
@@ -1085,8 +1090,10 @@ APE_JS_NATIVE(apelogfile_constructor)
 
         /* If no dir has been set then no log writing is allowed */
         if (value == NULL) {
+		ape_log(APE_ERR, __FILE__, __LINE__, g_ape, 
+			"LogFile : Failed to initialize because log writing has not been enabled in server configuration");
 		*rval = JS_FALSE;
-		return JS_TRUE;
+		return JS_FALSE;
 	}
 
 	myhandle = xmalloc(sizeof(*myhandle));
@@ -1100,15 +1107,17 @@ APE_JS_NATIVE(apelogfile_constructor)
 	}
         if (path[0] == '/') {
 		if (strlen(path) <= val_len || 
-		    strncmp(path, value, val_len) != 0 ||  
+		    strncmp(path, value, val_len) != 0 ||
 		    path[val_len] != '/') {
+		        ape_log(APE_ERR, __FILE__, __LINE__, g_ape, 
+			"LogFile : Failed to initialize because absolute path given does not match directory authorized in server configuration");
 			*rval = JS_FALSE;
-			return JS_TRUE;
+			return JS_FALSE;
 		}
 		myhandle->filename = path;
 	} else {
 		myhandle->filename = xmalloc(val_len + strlen(path) + 2*sizeof(*value));
-		strncpy(myhandle->filename, value, val_len+1);
+		strncpy(myhandle->filename, value, val_len);
 		myhandle->filename[val_len] = '/'; // force to '/'
 		strcpy(myhandle->filename+val_len+1, path);
 	}
@@ -1116,7 +1125,7 @@ APE_JS_NATIVE(apelogfile_constructor)
         myhandle->fp = fopen(myhandle->filename, "a");
         if (myhandle->fp == NULL) {
 		*rval = JS_FALSE;
-		return JS_TRUE;
+		return JS_FALSE;
 	}
 
 	JS_SetPrivate(cx, obj, myhandle);
@@ -1179,15 +1188,17 @@ APE_JS_NATIVE(apelogfile_close)
         return JS_TRUE;
 }
 
-static void apelogfile_finalize(JSContext *cx, JSObject *jslog)
+static void apelogfile_finalize(JSContext *cx, JSObject *obj)
 {
 	struct _ape_logfile_data *myhandle;
 
-	if ((myhandle = JS_GetPrivate(cx, jslog)) != NULL) {
+	if ((myhandle = JS_GetPrivate(cx, obj)) != NULL) {
 		if (myhandle->fp != NULL) {
 			fclose(myhandle->fp);
 		}
 		myhandle->fp = NULL;
+		free(myhandle);
+		JS_SetPrivate(cx, obj, NULL);
 	}
 }
 
