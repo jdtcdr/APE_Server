@@ -21,7 +21,6 @@
 /* HOWTO : http://www.ape-project.org/wiki/index.php/How_to_build_a_serverside_JS_module */
 
 #define XP_UNIX
-
 #include "../src/configure.h"
 #ifdef _USE_MYSQL
 #include <mysac.h>
@@ -51,7 +50,7 @@ static int ape_fire_cmd(const char *name, JSObject *obj, JSObject *cb, callbackp
 static JSObject *ape_json_to_jsobj(JSContext *cx, json_item *head, JSObject *root);
 /* JSNative macro prototype */
 #define APE_JS_NATIVE(func_name) \
-	static JSBool func_name(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval) \
+	static JSBool func_name(JSContext *cx, uintN argc, jsval *vpn) \
 	{\
 		ape_sm_compiled *asc; \
 		acetables *g_ape; \
@@ -64,7 +63,7 @@ static JSObject *ape_json_to_jsobj(JSContext *cx, json_item *head, JSObject *roo
 static void apemysql_finalize(JSContext *cx, JSObject *jsmysql);
 #endif
 
-static JSBool ape_sm_stub(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
+static JSBool ape_sm_stub(JSContext *cx, uintN argc, jsval *vpn)
 {
 	return JS_TRUE;
 }
@@ -91,10 +90,9 @@ typedef struct _ape_sm_compiled ape_sm_compiled;
 struct _ape_sm_compiled {
 	char *filename;
 	
-	JSScript *bytecode;
+	JSObject *bytecode;
 	JSContext *cx;
 	JSObject *global;
-	JSObject *scriptObj;
 	
 	acetables *g_ape;
 	
@@ -180,105 +178,107 @@ static ace_plugin_infos infos_module = {
 
 static JSClass apesocket_class = {
 	"apesocket", JSCLASS_HAS_PRIVATE,
-	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
-	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
-	    JSCLASS_NO_OPTIONAL_MEMBERS
+		JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
+		JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
+		JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
 /* Standard javascript object */
 static JSClass global_class = {
-	"global", JSCLASS_GLOBAL_FLAGS,
-	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
-	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
-	    JSCLASS_NO_OPTIONAL_MEMBERS
+	"global", JSCLASS_GLOBAL_FLAGS | JSCLASS_IS_GLOBAL,
+		JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
+		JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
+		JSCLASS_NO_OPTIONAL_MEMBERS
 
 };
 
 /* The main Ape Object (global) */
 static JSClass ape_class = {
 	"Ape", JSCLASS_HAS_PRIVATE,
-	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
-	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
-	    JSCLASS_NO_OPTIONAL_MEMBERS
+		JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
+		JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
+		JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
 static JSClass b64_class = {
 	"base64", JSCLASS_HAS_PRIVATE,
-	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
-	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
-	    JSCLASS_NO_OPTIONAL_MEMBERS
+		JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
+		JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
+		JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
 static JSClass sha1_class = {
 	"sha1", JSCLASS_HAS_PRIVATE,
-	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
-	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
-	    JSCLASS_NO_OPTIONAL_MEMBERS
+		JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
+		JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
+		JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
 static JSClass socketserver_class = {
 	"sockServer", JSCLASS_HAS_PRIVATE,
-	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
-	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
-	    JSCLASS_NO_OPTIONAL_MEMBERS
+		JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
+		JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
+		JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
 static JSClass socketclient_class = {
 	"sockClient", JSCLASS_HAS_PRIVATE,
-	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
-	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
-	    JSCLASS_NO_OPTIONAL_MEMBERS
+		JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
+		JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
+		JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
+#if 0
 static JSClass raw_class = {
 	"raw", JSCLASS_HAS_PRIVATE,
-	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
-	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
-	    JSCLASS_NO_OPTIONAL_MEMBERS
+		JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
+		JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
+		JSCLASS_NO_OPTIONAL_MEMBERS
 };
+#endif
 
 static JSClass user_class = {
 	"user", JSCLASS_HAS_PRIVATE,
-	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
-	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
-	    JSCLASS_NO_OPTIONAL_MEMBERS
+		JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
+		JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
+		JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
 static JSClass subuser_class = {
 	"subuser", JSCLASS_HAS_PRIVATE,
-	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
-	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
-	    JSCLASS_NO_OPTIONAL_MEMBERS
+		JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
+		JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
+		JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
 static JSClass channel_class = {
 	"channel", JSCLASS_HAS_PRIVATE,
-	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
-	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
-	    JSCLASS_NO_OPTIONAL_MEMBERS
+		JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
+		JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
+		JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
 static JSClass pipe_class = {
 	"pipe", JSCLASS_HAS_PRIVATE,
-	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
-	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
-	    JSCLASS_NO_OPTIONAL_MEMBERS
+		JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
+		JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
+		JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
 #ifdef _USE_MYSQL
 static JSClass mysql_class = {
 	"MySQL", JSCLASS_HAS_PRIVATE,
-	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
-	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, apemysql_finalize,
-	    JSCLASS_NO_OPTIONAL_MEMBERS
+		JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
+		JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, apemysql_finalize,
+		JSCLASS_NO_OPTIONAL_MEMBERS
 };
 #endif
 
 static JSClass cmdresponse_class = {
 	"cmdresponse", JSCLASS_HAS_PRIVATE,
-	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
-	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
-	    JSCLASS_NO_OPTIONAL_MEMBERS
+		JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
+		JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
+		JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
 static JSClass logfile_class = {
@@ -291,7 +291,11 @@ static JSClass logfile_class = {
 APE_JS_NATIVE(apesocket_write)
 //{
 	JSString *string;
+	char *cstring;
+	size_t lstring;
 	JSBool burn = JS_FALSE;
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
+	
 	struct _ape_sock_callbacks *cb = JS_GetPrivate(cx, obj);
 	ape_socket *client;
 	
@@ -301,11 +305,17 @@ APE_JS_NATIVE(apesocket_write)
 	
 	client = ((struct _ape_sock_js_obj *)cb->private)->client;
 
-	if (client == NULL || !JS_ConvertArguments(cx, argc, argv, "S/b", &string, &burn)) {
+	if (client == NULL || !JS_ConvertArguments(cx, argc, JS_ARGV(cx, vpn), "S/b", &string, &burn)) {
 		return JS_TRUE;
 	}
-
-	sendbin(client->fd, JS_GetStringBytes(string), JS_GetStringLength(string), (burn == JS_TRUE ? 1 : 0), g_ape);
+	
+	lstring = JS_GetStringEncodingLength(cx, string);
+	cstring = JS_malloc(cx, lstring);
+	lstring = JS_EncodeStringToBuffer(string, cstring, lstring);
+	
+	sendbin(client->fd, cstring, lstring, (burn == JS_TRUE ? 1 : 0), g_ape);
+	
+	JS_free(cx, cstring);
 	
 	return JS_TRUE;
 }
@@ -313,24 +323,35 @@ APE_JS_NATIVE(apesocket_write)
 APE_JS_NATIVE(apesocketclient_write)
 //{
 	JSString *string;
+	char *cstring;
+	size_t lstring;
 	JSBool burn = JS_FALSE;
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
+	
 	ape_socket *client = JS_GetPrivate(cx, obj);
 	
 	if (client == NULL) {
 		return JS_TRUE;
 	}
 
-	if (!JS_ConvertArguments(cx, argc, argv, "S/b", &string)) {
+	if (!JS_ConvertArguments(cx, argc, JS_ARGV(cx, vpn), "S/b", &string)) {
 		return JS_TRUE;
 	}
-
-	sendbin(client->fd, JS_GetStringBytes(string), JS_GetStringLength(string), (burn == JS_TRUE ? 1 : 0), g_ape);
+	
+	lstring = JS_GetStringEncodingLength(cx, string);
+	cstring = JS_malloc(cx, lstring);
+	lstring = JS_EncodeStringToBuffer(string, cstring, lstring);
+	
+	sendbin(client->fd, cstring, lstring, (burn == JS_TRUE ? 1 : 0), g_ape);
+	
+	JS_free(cx, cstring);
 	
 	return JS_TRUE;
 }
-
-static JSBool apesocketclient_close(JSContext *cx, JSObject *obj, uintN argc, jsval *argv, jsval *rval)
-{
+APE_JS_NATIVE(apesocketclient_close)
+//{
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
+	
 	ape_socket *client = JS_GetPrivate(cx, obj);
 	
 	if (client == NULL) {
@@ -346,7 +367,8 @@ APE_JS_NATIVE(apesocket_close)
 //{
 	ape_socket *client;
 	JSBool safe = JS_FALSE;
-
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
+	
 	struct _ape_sock_callbacks *cb = JS_GetPrivate(cx, obj);
 	
 	if (cb == NULL || !cb->state) {
@@ -359,7 +381,7 @@ APE_JS_NATIVE(apesocket_close)
 		return JS_TRUE;
 	}
 
-	if (!JS_ConvertArguments(cx, argc, argv, "/b", &safe)) {
+	if (!JS_ConvertArguments(cx, argc, JS_ARGV(cx, vpn), "/b", &safe)) {
 		return JS_TRUE;
 	}
 	
@@ -376,6 +398,7 @@ APE_JS_NATIVE(apesocket_close)
 APE_JS_NATIVE(apesocketserver_close)
 //{
 	ape_socket *server;
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
 	
 	server = JS_GetPrivate(cx, obj);
 	
@@ -391,9 +414,9 @@ APE_JS_NATIVE(apesocketserver_close)
 static json_item *jsobj_to_ape_json(JSContext *cx, JSObject *json_obj)
 {
 	unsigned int i, length = 0, isarray = 0;
-	jsval propname;
 	JSIdArray *enumjson = NULL;
 	json_item *ape_json = NULL;
+	jsval propname;
 	
 	/* TODO Fixme : If array has no contigus values, they cannot be retrived, use JS_NewPropertyIterator, JS_NextProperty */
 	
@@ -421,7 +444,7 @@ static json_item *jsobj_to_ape_json(JSContext *cx, JSObject *json_obj)
 		if (!isarray) {
 			JS_IdToValue(cx, enumjson->vector[i], &propname);
 			key = JS_ValueToString(cx, propname);
-			JS_GetProperty(cx, json_obj, JS_GetStringBytes(key), &vp);
+			JS_GetPropertyById(cx, json_obj, enumjson->vector[i], &vp);
 		} else {
 			JS_GetElement(cx, json_obj, i, &vp);
 		}
@@ -434,16 +457,24 @@ static json_item *jsobj_to_ape_json(JSContext *cx, JSObject *json_obj)
 				
 				/* hmm "null" is an empty object */
 				if (JSVAL_TO_OBJECT(vp) == NULL) {
-				    if (!isarray) {
-					    json_set_property_null(ape_json, JS_GetStringBytes(key), JS_GetStringLength(key));
-				    } else {
-					    json_set_element_null(ape_json);
-				    }
-				    break;
+					if (!isarray) {
+						json_item *jitem;
+						size_t jlength = JS_GetStringEncodingLength(cx, key);
+						
+						jitem = json_set_property_null(ape_json, "\0", jlength);
+						jitem->key.len = JS_EncodeStringToBuffer(key, jitem->key.val, jlength);
+					} else {
+						json_set_element_null(ape_json);
+					}
+					break;
 				}			
 				if ((val_obj = jsobj_to_ape_json(cx, JSVAL_TO_OBJECT(vp))) != NULL) {
 					if (!isarray) {
-						json_set_property_objN(ape_json, JS_GetStringBytes(key), JS_GetStringLength(key), val_obj);
+						json_item *jitem;
+						size_t jlength = JS_GetStringEncodingLength(cx, key);
+						
+						jitem = json_set_property_objN(ape_json, "\0", jlength, val_obj);
+						jitem->key.len = JS_EncodeStringToBuffer(key, jitem->key.val, jlength);
 					} else {
 						json_set_element_obj(ape_json, val_obj);
 					}
@@ -453,35 +484,84 @@ static json_item *jsobj_to_ape_json(JSContext *cx, JSObject *json_obj)
 
 				break;
 			case JSTYPE_STRING:
+			{
+				json_item *jitem;
+				size_t jvlength;
 				
 				value = JSVAL_TO_STRING(vp);
+				jvlength = JS_GetStringEncodingLength(cx, value);
 				
 				if (!isarray) {
-					json_set_property_strN(ape_json, JS_GetStringBytes(key), JS_GetStringLength(key), JS_GetStringBytes(value), JS_GetStringLength(value));
+					size_t jklength = JS_GetStringEncodingLength(cx, key);
+					
+					jitem = json_set_property_strN(ape_json, "\0", jklength, "\0", jvlength);
+					jitem->key.len = JS_EncodeStringToBuffer(key, jitem->key.val, jklength);
+					jitem->jval.vu.str.length = JS_EncodeStringToBuffer(value, jitem->jval.vu.str.value, jvlength);
+					
 				} else {
-					json_set_element_strN(ape_json, JS_GetStringBytes(value), JS_GetStringLength(value));
+					jitem = json_set_element_strN(ape_json, "\0", jvlength);
+					jitem->jval.vu.str.length = JS_EncodeStringToBuffer(value, jitem->jval.vu.str.value, jvlength);
 				}
 				
 				break;
+			}
 			case JSTYPE_NUMBER:
 				{
-					jsdouble dp;
-					JS_ValueToNumber(cx, vp, &dp);
-				
-					if (!isarray) {
-						/* json_set_property_intN(ape_json, JS_GetStringBytes(key), JS_GetStringLength(key), (long int)dp); */
-						json_set_property_floatN(ape_json, JS_GetStringBytes(key), JS_GetStringLength(key), dp);
+					if (JSVAL_IS_INT(vp) ) {
+						jsint di = JSVAL_TO_INT(vp);
+
+						if (!isarray) {
+							json_item *jitem;
+							size_t jklength = JS_GetStringEncodingLength(cx, key);
+							
+							jitem = json_set_property_intN(ape_json, "\0", jklength, di);
+							jitem->key.len = JS_EncodeStringToBuffer(key, jitem->key.val, jklength);
+							
+						} else {
+							json_set_element_int(ape_json, di);
+						}
 					} else {
-						/* json_set_element_int(ape_json, (long int)dp); */
-						json_set_element_float(ape_json, dp);
+						jsdouble dp;
+
+						JS_ValueToNumber(cx, vp, &dp);
+						long long ll = (long long)trunc(dp);
+
+						if (ll != dp) { // 
+							if (!isarray) {
+								json_item *jitem;
+								size_t jklength = JS_GetStringEncodingLength(cx, key);
+								
+								jitem = json_set_property_floatN(ape_json, "\0", jklength, dp);
+								jitem->key.len = JS_EncodeStringToBuffer(key, jitem->key.val, jklength);
+							} else {
+								json_set_element_float(ape_json, dp);
+							}
+						} else {
+							
+							if (!isarray) {
+								json_item *jitem;
+								size_t jklength = JS_GetStringEncodingLength(cx, key);
+								
+								jitem = json_set_property_intN(ape_json, "\0", jklength, dp);
+								jitem->key.len = JS_EncodeStringToBuffer(key, jitem->key.val, jklength);
+								
+							} else {
+								json_set_element_int(ape_json, dp);
+							}
+						}
 					}
 				}
 				break;
 			case JSTYPE_BOOLEAN:
 				if (!isarray) {
-					json_set_property_boolean(ape_json, JS_GetStringBytes(key), JS_GetStringLength(key), (vp == JSVAL_TRUE));
+					json_item *jitem;
+					size_t jklength = JS_GetStringEncodingLength(cx, key);
+								
+					jitem = json_set_property_boolean(ape_json, "\0", jklength, JSVAL_TO_BOOLEAN(vp));
+					jitem->key.len = JS_EncodeStringToBuffer(key, jitem->key.val, jklength);
+					
 				} else {
-					json_set_element_boolean(ape_json, (vp == JSVAL_TRUE));
+					json_set_element_boolean(ape_json, JSVAL_TO_BOOLEAN(vp));
 				}
 				break;
 			default:
@@ -499,35 +579,43 @@ static json_item *jsobj_to_ape_json(JSContext *cx, JSObject *json_obj)
 
 APE_JS_NATIVE(apepipe_sm_get_property)
 //{
-	const char *property;
+	char *cproperty;
+	JSString *property;
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
 	transpipe *pipe = JS_GetPrivate(cx, obj);
 	
 	if (pipe == NULL) {
 		return JS_TRUE;
 	}
 	
-	if (!JS_ConvertArguments(cx, 1, argv, "s", &property)) {
+	if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "S", &property)) {
 		return JS_TRUE;
 	}
-	if (strcmp(property, "pubid") == 0) {
-		*rval = STRING_TO_JSVAL(JS_NewStringCopyN(cx, pipe->pubid, 32));
+	
+	cproperty = JS_EncodeString(cx, property);
+	
+	if (strcmp(cproperty, "pubid") == 0) {
+		JS_SET_RVAL(cx, vpn, STRING_TO_JSVAL(JS_NewStringCopyN(cx, pipe->pubid, 32)));
 	} else {
-		extend *getprop = get_property(pipe->properties, property);
+		extend *getprop = get_property(pipe->properties, cproperty);
 		if (getprop != NULL) {
 			if (getprop->type == EXTEND_STR) {
-				*rval = STRING_TO_JSVAL(JS_NewStringCopyZ(cx, getprop->val));
+				JS_SET_RVAL(cx, vpn, STRING_TO_JSVAL(JS_NewStringCopyZ(cx, getprop->val)));
 			} else if (getprop->type == EXTEND_JSON) {
 				JSObject *propobj = ape_json_to_jsobj(cx, ((json_item *)getprop->val)->jchild.child, NULL);
-				*rval = OBJECT_TO_JSVAL(propobj);
+				JS_SET_RVAL(cx, vpn, OBJECT_TO_JSVAL(propobj));
 			}
 		}
-	}	
+	}
+	
+	JS_free(cx, property);
 	
 	return JS_TRUE;
 }
 
 APE_JS_NATIVE(apepipe_sm_get_parent)
 //{
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
 	transpipe *pipe = JS_GetPrivate(cx, obj);
 	
 	if (pipe == NULL) {
@@ -536,9 +624,9 @@ APE_JS_NATIVE(apepipe_sm_get_parent)
 	
 	switch(pipe->type) {
 		case USER_PIPE:
-			*rval = OBJECT_TO_JSVAL(APEUSER_TO_JSOBJ(((USERS*)pipe->pipe)));
+			JS_SET_RVAL(cx, vpn, OBJECT_TO_JSVAL(APEUSER_TO_JSOBJ(((USERS*)pipe->pipe))));
 		case CHANNEL_PIPE:
-			*rval = OBJECT_TO_JSVAL(APECHAN_TO_JSOBJ(((CHANNEL*)pipe->pipe)));
+			JS_SET_RVAL(cx, vpn, OBJECT_TO_JSVAL(APECHAN_TO_JSOBJ(((CHANNEL*)pipe->pipe))));
 		default:
 			break;
 	}
@@ -548,7 +636,9 @@ APE_JS_NATIVE(apepipe_sm_get_parent)
 
 APE_JS_NATIVE(apepipe_sm_set_property)
 //{
-	char *key;
+	JSString *key;
+	char *ckey;
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
 	transpipe *pipe = JS_GetPrivate(cx, obj);
 	int typextend = EXTEND_STR;
 	void *valuextend = NULL;
@@ -561,36 +651,44 @@ APE_JS_NATIVE(apepipe_sm_set_property)
 		return JS_TRUE;
 	}	
 	
-	if (!JS_ConvertArguments(cx, 1, argv, "s", &key)) {
+	if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "S", &key)) {
 		return JS_TRUE;
 	}
 	
-	if (JSVAL_IS_OBJECT(argv[1])) { /* Convert to APE JSON Object */
+	ckey = JS_EncodeString(cx, key);
+	
+	if (JSVAL_IS_OBJECT(JS_ARGV(cx, vpn)[1])) { /* Convert to APE JSON Object */
 		json_item *ji;
 
-		if ((ji = jsobj_to_ape_json(cx, JSVAL_TO_OBJECT(argv[1]))) != NULL) {
+		if ((ji = jsobj_to_ape_json(cx, JSVAL_TO_OBJECT(JS_ARGV(cx, vpn)[1]))) != NULL) {
 			typextend = EXTEND_JSON;
 			valuextend = ji;
 		}
 	} else { /* Convert to string */
 		typextend = EXTEND_STR;
-		valuextend = JS_GetStringBytes(JS_ValueToString(cx, argv[1])); /* No needs to be gc-rooted while there is no JSAPI Call after that */
+		valuextend = JS_EncodeString(cx, JS_ValueToString(cx, JS_ARGV(cx, vpn)[1])); /* No needs to be gc-rooted while there is no JSAPI Call after that */
 	}	
 
 	switch(pipe->type) {
 		case USER_PIPE:
 			/* Set property on directly on the user (not on the pipe) */
-			add_property(&((USERS *)(pipe->pipe))->properties, key, valuextend, typextend, EXTEND_ISPUBLIC);
+			add_property(&((USERS *)(pipe->pipe))->properties, ckey, valuextend, typextend, EXTEND_ISPUBLIC);
 			break;
 		case CHANNEL_PIPE:
 			/* Set property on directly on the channel (not on the pipe) */
-			add_property(&((CHANNEL *)(pipe->pipe))->properties, key, valuextend, typextend, EXTEND_ISPUBLIC);
+			add_property(&((CHANNEL *)(pipe->pipe))->properties, ckey, valuextend, typextend, EXTEND_ISPUBLIC);
 			break;
 		case CUSTOM_PIPE:
-			add_property(&pipe->properties, key, valuextend, typextend, EXTEND_ISPUBLIC);
+			add_property(&pipe->properties, ckey, valuextend, typextend, EXTEND_ISPUBLIC);
 		default:
 			break;
 	}
+	
+	if (typextend == EXTEND_STR && valuextend != NULL) {
+		JS_free(cx, valuextend);
+	}
+	
+	JS_free(cx, ckey);
 	
 	return JS_TRUE;
 }
@@ -601,6 +699,7 @@ APE_JS_NATIVE(apepipe_sm_to_object)
 	transpipe *spipe;
 	json_item *pipe_object;
 	JSObject *js_pipe_object;
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
 	
 	if ((spipe = JS_GetPrivate(cx, obj)) == NULL) {
 		return JS_TRUE;
@@ -610,7 +709,7 @@ APE_JS_NATIVE(apepipe_sm_to_object)
 	
 	js_pipe_object = ape_json_to_jsobj(cx, pipe_object->jchild.child, NULL);
 	
-	*rval = OBJECT_TO_JSVAL(js_pipe_object);
+	JS_SET_RVAL(cx, vpn, OBJECT_TO_JSVAL(js_pipe_object));
 	
 	return JS_TRUE;
 	
@@ -618,6 +717,7 @@ APE_JS_NATIVE(apepipe_sm_to_object)
 
 APE_JS_NATIVE(apepipe_sm_destroy)
 //{
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
 	transpipe *pipe = JS_GetPrivate(cx, obj);
 	
 	if (pipe == NULL) {
@@ -633,7 +733,8 @@ APE_JS_NATIVE(apepipe_sm_destroy)
 static JSBool sm_send_raw(JSContext *cx, transpipe *to_pipe, int chl, uintN argc, jsval *argv, acetables *g_ape)
 {
 	RAW *newraw;
-	const char *raw;
+	JSString *raw;
+	char *craw;
 	JSObject *json_obj = NULL, *options = NULL;
 	json_item *jstr;
 	jsval vp;
@@ -642,9 +743,11 @@ static JSBool sm_send_raw(JSContext *cx, transpipe *to_pipe, int chl, uintN argc
 		return JS_TRUE;
 	}
 	
-	if (!JS_ConvertArguments(cx, 3, argv, "so/o", &raw, &json_obj, &options) || json_obj == NULL) {
+	if (!JS_ConvertArguments(cx, 3, argv, "So/o", &raw, &json_obj, &options) || json_obj == NULL) {
 		return JS_TRUE;
 	}
+	
+	craw = JS_EncodeString(cx, raw);
 	
 	jstr = jsobj_to_ape_json(cx, json_obj);
 
@@ -663,7 +766,7 @@ static JSBool sm_send_raw(JSContext *cx, transpipe *to_pipe, int chl, uintN argc
 					
 					json_set_property_objN(jstr, "pipe", 4, get_json_object_pipe(to_pipe));
 				
-					newraw = forge_raw(raw, jstr);
+					newraw = forge_raw(craw, jstr);
 					post_raw_channel_restricted(newraw, to_pipe->pipe, from_pipe->pipe, g_ape);
 				}
 				if (options != NULL && JS_GetProperty(cx, options, "restrict", &vp) && JSVAL_IS_OBJECT(vp) && JS_InstanceOf(cx, JSVAL_TO_OBJECT(vp), &subuser_class, 0) == JS_TRUE) {
@@ -671,7 +774,7 @@ static JSBool sm_send_raw(JSContext *cx, transpipe *to_pipe, int chl, uintN argc
 					subuser *sub = JS_GetPrivate(cx, subjs);
 					if (sub != NULL && ((USERS *)from_pipe->pipe)->nsub > 1) {						
 						json_set_property_objN(jcopy, "pipe", 4, get_json_object_pipe(to_pipe));
-						newraw = forge_raw(raw, jcopy);
+						newraw = forge_raw(craw, jcopy);
 						post_raw_restricted(newraw, from_pipe->pipe, sub, g_ape);
 					} else {
 						free_json_item(jcopy);
@@ -680,6 +783,8 @@ static JSBool sm_send_raw(JSContext *cx, transpipe *to_pipe, int chl, uintN argc
 				} else {
 					free_json_item(jcopy);
 				}
+				
+				JS_free(cx, craw);
 				return JS_TRUE;
 			}
 		} else if (from_pipe != NULL && from_pipe->type == CUSTOM_PIPE) {
@@ -693,118 +798,133 @@ static JSBool sm_send_raw(JSContext *cx, transpipe *to_pipe, int chl, uintN argc
 		json_set_property_intN(jstr, "chl", 3, chl);
 	}
 	
-	newraw = forge_raw(raw, jstr);
-	
-	if (to_pipe->type == CHANNEL_PIPE) {
+	if (to_pipe->type == CHANNEL_PIPE && ((struct CHANNEL *)to_pipe->pipe)->head != NULL) {
 		if (options != NULL && JS_GetProperty(cx, options, "restrict", &vp) && JSVAL_IS_OBJECT(vp) && JS_InstanceOf(cx, JSVAL_TO_OBJECT(vp), &user_class, 0) == JS_TRUE) {
 			JSObject *userjs = JSVAL_TO_OBJECT(vp);
 			USERS *user = JS_GetPrivate(cx, userjs);
 			
 			if (user == NULL) {
-				free_raw(newraw);
+				free_json_item(jstr);
 				
+				JS_free(cx, craw);
 				return JS_TRUE;
 			}
+
+			post_raw_channel_restricted(forge_raw(craw, jstr), to_pipe->pipe, user, g_ape);
 			
-			post_raw_channel_restricted(newraw, to_pipe->pipe, user, g_ape);
-			
+			JS_free(cx, craw);
 			return JS_TRUE;
 		}
-		post_raw_channel(newraw, to_pipe->pipe, g_ape);
-	} else {
+		post_raw_channel(forge_raw(craw, jstr), to_pipe->pipe, g_ape);
+	} else if (to_pipe->type != CHANNEL_PIPE) {
 		if (options != NULL && JS_GetProperty(cx, options, "restrict", &vp) && JSVAL_IS_OBJECT(vp) && JS_InstanceOf(cx, JSVAL_TO_OBJECT(vp), &subuser_class, 0) == JS_TRUE) {
 			JSObject *subjs = JSVAL_TO_OBJECT(vp);
 			subuser *sub = JS_GetPrivate(cx, subjs);
 			
 			if (sub == NULL || ((USERS *)to_pipe->pipe)->nsub < 2 || to_pipe->pipe != sub->user) {
-				free_raw(newraw);
+				free_json_item(jstr);
+				
+				JS_free(cx, craw);
 				return JS_TRUE;
 			}
 
-			post_raw_restricted(newraw, to_pipe->pipe, sub, g_ape);
+			post_raw_restricted(forge_raw(craw, jstr), to_pipe->pipe, sub, g_ape);
 			
+			JS_free(cx, craw);
 			return JS_TRUE;
 
 		}
-		post_raw(newraw, to_pipe->pipe, g_ape);
+		post_raw(forge_raw(craw, jstr), to_pipe->pipe, g_ape);
+	} else {
+		free_json_item(jstr);
 	}
 	
+	JS_free(cx, craw);
 	return JS_TRUE;
 }
 
 APE_JS_NATIVE(apepipe_sm_send_raw)
 //{
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
 	transpipe *to_pipe = JS_GetPrivate(cx, obj);
 	
 	if (to_pipe == NULL) {
 		return JS_TRUE;
 	}
 	
-	return sm_send_raw(cx, to_pipe, 0, argc, argv, g_ape);
+	return sm_send_raw(cx, to_pipe, 0, argc, JS_ARGV(cx, vpn), g_ape);
 
 }
 
 APE_JS_NATIVE(apepipe_sm_send_response)
 //{
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
 	jsval user, chl, pipe;
 	JS_GetProperty(cx, obj, "user", &user);
 	
-	if (user == JSVAL_VOID || JS_InstanceOf(cx, JSVAL_TO_OBJECT(user), &user_class, 0) == JS_FALSE) {
+	if (JSVAL_IS_VOID(user) || JS_InstanceOf(cx, JSVAL_TO_OBJECT(user), &user_class, 0) == JS_FALSE) {
 		return JS_TRUE;
 	}
 	
 	JS_GetProperty(cx, JSVAL_TO_OBJECT(user), "pipe", &pipe);
 	
-	if (pipe == JSVAL_VOID || JS_InstanceOf(cx, JSVAL_TO_OBJECT(pipe), &pipe_class, 0) == JS_FALSE) {
+	if (JSVAL_IS_VOID(pipe) || JS_InstanceOf(cx, JSVAL_TO_OBJECT(pipe), &pipe_class, 0) == JS_FALSE) {
 		return JS_TRUE;
 	}
 	
 	JS_GetProperty(cx, obj, "chl", &chl);
 	
-	if (chl == JSVAL_VOID || !JSVAL_IS_NUMBER(chl)) {
+	if (JSVAL_IS_VOID(chl) || !JSVAL_IS_NUMBER(chl)) {
 		return JS_TRUE;
 	}
 	
 	/* TODO : Fixme JSVAL_TO_INT => double */
-	return sm_send_raw(cx, JS_GetPrivate(cx, JSVAL_TO_OBJECT(pipe)), JSVAL_TO_INT(chl), argc, argv, g_ape);
+	return sm_send_raw(cx, JS_GetPrivate(cx, JSVAL_TO_OBJECT(pipe)), JSVAL_TO_INT(chl), argc, JS_ARGV(cx, vpn), g_ape);
 }
 
 APE_JS_NATIVE(apechannel_sm_get_property)
 //{
-	const char *property;
+	JSString *property;
+	char *cproperty;
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
 	CHANNEL *chan = JS_GetPrivate(cx, obj);
 	
 	if (chan == NULL) {
 		return JS_TRUE;
 	}
 	
-	if (!JS_ConvertArguments(cx, 1, argv, "s", &property)) {
+	if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "S", &property)) {
 		return JS_TRUE;
 	}
 	
-	if (strcmp(property, "pubid") == 0) {
-		*rval = STRING_TO_JSVAL(JS_NewStringCopyN(cx, chan->pipe->pubid, 32));
-	} else if (strcmp(property, "name") == 0) {
-		*rval = STRING_TO_JSVAL(JS_NewStringCopyZ(cx, chan->name));
+	cproperty = JS_EncodeString(cx, property);
+	
+	if (strcmp(cproperty, "pubid") == 0) {
+		JS_SET_RVAL(cx, vpn, STRING_TO_JSVAL(JS_NewStringCopyN(cx, chan->pipe->pubid, 32)));
+	} else if (strcmp(cproperty, "name") == 0) {
+		JS_SET_RVAL(cx, vpn, STRING_TO_JSVAL(JS_NewStringCopyZ(cx, chan->name)));
 	} else {
-		extend *getprop = get_property(chan->properties, property);
+		extend *getprop = get_property(chan->properties, cproperty);
 		if (getprop != NULL) {
 			if (getprop->type == EXTEND_STR) {
-				*rval = STRING_TO_JSVAL(JS_NewStringCopyZ(cx, getprop->val));
+				JS_SET_RVAL(cx, vpn, STRING_TO_JSVAL(JS_NewStringCopyZ(cx, getprop->val)));
 			} else if (getprop->type == EXTEND_JSON) {
 				JSObject *propobj = ape_json_to_jsobj(cx, ((json_item *)getprop->val)->jchild.child, NULL);
-				*rval = OBJECT_TO_JSVAL(propobj);
+				JS_SET_RVAL(cx, vpn, OBJECT_TO_JSVAL(propobj));
 			}
 		}
 	}
+	
+	JS_free(cx, cproperty);
 	
 	return JS_TRUE;
 }
 
 APE_JS_NATIVE(apechannel_sm_set_property)
 //{
-	char *key;
-	JSString *property;
+	JSString *key;
+	char *ckey, *property;
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
 
 	CHANNEL *chan = JS_GetPrivate(cx, obj);
 	
@@ -812,34 +932,39 @@ APE_JS_NATIVE(apechannel_sm_set_property)
 		return JS_TRUE;
 	}
 
-	if (!JS_ConvertArguments(cx, 2, argv, "s", &key)) {
+	if (!JS_ConvertArguments(cx, 2, JS_ARGV(cx, vpn), "S", &key)) {
 		return JS_TRUE;
 	}
 	
-	if (JSVAL_IS_OBJECT(argv[1])) { /* Convert to APE JSON Object */
+	ckey = JS_EncodeString(cx, key);
+	
+	if (JSVAL_IS_OBJECT(JS_ARGV(cx, vpn)[1])) { /* Convert to APE JSON Object */
 		json_item *ji;
 		
-		if ((ji = jsobj_to_ape_json(cx, JSVAL_TO_OBJECT(argv[1]))) != NULL) {
-			add_property(&chan->properties, key, ji, EXTEND_JSON, EXTEND_ISPUBLIC);
+		if ((ji = jsobj_to_ape_json(cx, JSVAL_TO_OBJECT(JS_ARGV(cx, vpn)[1]))) != NULL) {
+			add_property(&chan->properties, ckey, ji, EXTEND_JSON, EXTEND_ISPUBLIC);
 		}
 	} else { /* Convert to string */
-		property = JS_ValueToString(cx, argv[1]); /* No needs to be gc-rooted while there is no JSAPI Call after that */
-		add_property(&chan->properties, key, JS_GetStringBytes(property), EXTEND_STR, EXTEND_ISPUBLIC);
+		property = JS_EncodeString(cx, JS_ValueToString(cx, JS_ARGV(cx, vpn)[1])); /* No needs to be gc-rooted while there is no JSAPI Call after that */
+		add_property(&chan->properties, ckey, property, EXTEND_STR, EXTEND_ISPUBLIC);
+		JS_free(cx, property);
 	}
-
+	
+	JS_free(cx, ckey);
 	
 	return JS_TRUE;
 }
 
 APE_JS_NATIVE(apechannel_sm_isinteractive)
 //{
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
 	CHANNEL *chan = JS_GetPrivate(cx, obj);
 	
 	if (chan == NULL) {
-        return JS_TRUE;
+		return JS_TRUE;
 	}
 	
-	*rval = (!(chan->flags & CHANNEL_NONINTERACTIVE) ? JSVAL_TRUE : JSVAL_FALSE);
+	JS_SET_RVAL(cx, vpn, (!(chan->flags & CHANNEL_NONINTERACTIVE) ? JSVAL_TRUE : JSVAL_FALSE));
 		
 	return JS_TRUE;
 }
@@ -847,40 +972,47 @@ APE_JS_NATIVE(apechannel_sm_isinteractive)
 
 APE_JS_NATIVE(apeuser_sm_get_property)
 //{
-	const char *property;
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
+	JSString *property;
 	USERS *user = JS_GetPrivate(cx, obj);
+	char *cproperty;
 
 	if (user == NULL) {
 		return JS_TRUE;
 	}
 	
-	if (!JS_ConvertArguments(cx, 1, argv, "s", &property)) {
+	if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "S", &property)) {
 		return JS_TRUE;
 	}
 	
-	if (strcmp(property, "sessid") == 0) {
-		*rval = STRING_TO_JSVAL(JS_NewStringCopyN(cx, user->sessid, 32));
-	} else if (strcmp(property, "pubid") == 0) {
-		*rval = STRING_TO_JSVAL(JS_NewStringCopyN(cx, user->pipe->pubid, 32));
-	} else if (strcmp(property, "ip") == 0) {
-		*rval = STRING_TO_JSVAL(JS_NewStringCopyZ(cx, user->ip));
+	cproperty = JS_EncodeString(cx, property);
+	
+	if (strcmp(cproperty, "sessid") == 0) {
+		JS_SET_RVAL(cx, vpn, STRING_TO_JSVAL(JS_NewStringCopyN(cx, user->sessid, 32)));
+	} else if (strcmp(cproperty, "pubid") == 0) {
+		JS_SET_RVAL(cx, vpn, STRING_TO_JSVAL(JS_NewStringCopyN(cx, user->pipe->pubid, 32)));
+	} else if (strcmp(cproperty, "ip") == 0) {
+		JS_SET_RVAL(cx, vpn, STRING_TO_JSVAL(JS_NewStringCopyZ(cx, user->ip)));
 	} else {
-		extend *getprop = get_property(user->properties, property);
+		extend *getprop = get_property(user->properties, cproperty);
 		if (getprop != NULL) {
 			if (getprop->type == EXTEND_STR) {
-				*rval = STRING_TO_JSVAL(JS_NewStringCopyZ(cx, getprop->val));
+				JS_SET_RVAL(cx, vpn, STRING_TO_JSVAL(JS_NewStringCopyZ(cx, getprop->val)));
 			} else if (getprop->type == EXTEND_JSON) {
 				JSObject *propobj = ape_json_to_jsobj(cx, ((json_item *)getprop->val)->jchild.child, NULL);
-				*rval = OBJECT_TO_JSVAL(propobj);
+				JS_SET_RVAL(cx, vpn, OBJECT_TO_JSVAL(propobj));
 			}
 		}
 	}
+	
+	JS_free(cx, cproperty);
 	
 	return JS_TRUE;
 }
 
 APE_JS_NATIVE(apeuser_sm_quit)
 //{
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
 	USERS *user = JS_GetPrivate(cx, obj);
 
 	if (user == NULL) {
@@ -895,23 +1027,30 @@ APE_JS_NATIVE(apeuser_sm_quit)
 APE_JS_NATIVE(apeuser_sm_join)
 //{
 	CHANNEL *chan;
-	char *chan_name;
+	JSString *chan_name;
 	JSObject *chan_obj;
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
+	char *cchan_name;
+	
 	USERS *user = JS_GetPrivate(cx, obj);
 	
-	*rval = JSVAL_FALSE;
+	JS_SET_RVAL(cx, vpn, JSVAL_FALSE);
 		
 	if (user == NULL) {
 		return JS_TRUE;
 	}
 	
-	if (JSVAL_IS_STRING(argv[0])) {
-		JS_ConvertArguments(cx, 1, argv, "s", &chan_name);
-		if ((chan = getchan(chan_name, g_ape)) == NULL) {
+	if (JSVAL_IS_STRING(JS_ARGV(cx, vpn)[0])) {
+		JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "S", &chan_name);
+		cchan_name = JS_EncodeString(cx, chan_name);
+		
+		if ((chan = getchan(cchan_name, g_ape)) == NULL) {
+			JS_free(cx, cchan_name);
 			return JS_TRUE;
 		}
-	} else if (JSVAL_IS_OBJECT(argv[0])) {
-		JS_ConvertArguments(cx, 1, argv, "o", &chan_obj);
+		JS_free(cx, cchan_name);
+	} else if (JSVAL_IS_OBJECT(JS_ARGV(cx, vpn)[0])) {
+		JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "o", &chan_obj);
 		if (!JS_InstanceOf(cx, chan_obj, &channel_class, 0) || (chan = JS_GetPrivate(cx, chan_obj)) == NULL) {
 			return JS_TRUE;
 		}
@@ -921,30 +1060,36 @@ APE_JS_NATIVE(apeuser_sm_join)
 	
 	join(user, chan, g_ape);
 	
-	*rval = JSVAL_TRUE;
+	JS_SET_RVAL(cx, vpn, JSVAL_TRUE);
+	
 	return JS_TRUE;
 }
 
 APE_JS_NATIVE(apeuser_sm_left)
 //{
 	CHANNEL *chan;
-	char *chan_name;
+	JSString *chan_name;
 	JSObject *chan_obj;
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
+	char *cchan_name;
 	USERS *user = JS_GetPrivate(cx, obj);
 	
-	*rval = JSVAL_FALSE;
+	JS_SET_RVAL(cx, vpn, JSVAL_FALSE);
 		
 	if (user == NULL) {
 		return JS_TRUE;
 	}
 	
-	if (JSVAL_IS_STRING(argv[0])) {
-		JS_ConvertArguments(cx, 1, argv, "s", &chan_name);
-		if ((chan = getchan(chan_name, g_ape)) == NULL) {
+	if (JSVAL_IS_STRING(JS_ARGV(cx, vpn)[0])) {
+		JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "S", &chan_name);
+		cchan_name = JS_EncodeString(cx, chan_name);
+		if ((chan = getchan(cchan_name, g_ape)) == NULL) {
+			JS_free(cx, cchan_name);
 			return JS_TRUE;
 		}
-	} else if (JSVAL_IS_OBJECT(argv[0])) {
-		JS_ConvertArguments(cx, 1, argv, "o", &chan_obj);
+		JS_free(cx, cchan_name);
+	} else if (JSVAL_IS_OBJECT(JS_ARGV(cx, vpn)[0])) {
+		JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "o", &chan_obj);
 		if (!JS_InstanceOf(cx, chan_obj, &channel_class, 0) || (chan = JS_GetPrivate(cx, chan_obj)) == NULL) {
 			return JS_TRUE;
 		}
@@ -954,14 +1099,16 @@ APE_JS_NATIVE(apeuser_sm_left)
 	
 	left(user, chan, g_ape);
 	
-	*rval = JSVAL_TRUE;
+	JS_SET_RVAL(cx, vpn, JSVAL_TRUE);
+	
 	return JS_TRUE;
 }
 
 APE_JS_NATIVE(apeuser_sm_set_property)
 //{
-	char *key;
-	JSString *property;
+	char *ckey, *property;
+	JSString *key;
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
 	USERS *user = JS_GetPrivate(cx, obj);
 	
 	if (user == NULL) {
@@ -972,20 +1119,26 @@ APE_JS_NATIVE(apeuser_sm_set_property)
 		return JS_TRUE;
 	}	
 	
-	if (!JS_ConvertArguments(cx, 1, argv, "s", &key)) {
+	if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "S", &key)) {
 		return JS_TRUE;
 	}
 	
-	if (JSVAL_IS_OBJECT(argv[1])) { /* Convert to APE JSON Object */
+	ckey = JS_EncodeString(cx, key);
+	
+	if (JSVAL_IS_OBJECT(JS_ARGV(cx, vpn)[1])) { /* Convert to APE JSON Object */
 		json_item *ji;
 		
-		if ((ji = jsobj_to_ape_json(cx, JSVAL_TO_OBJECT(argv[1]))) != NULL) {
-			add_property(&user->properties, key, ji, EXTEND_JSON, EXTEND_ISPUBLIC);
+		if ((ji = jsobj_to_ape_json(cx, JSVAL_TO_OBJECT(JS_ARGV(cx, vpn)[1]))) != NULL) {
+			add_property(&user->properties, ckey, ji, EXTEND_JSON, EXTEND_ISPUBLIC);
 		}
 	} else { /* Convert to string */
-		property = JS_ValueToString(cx, argv[1]); /* No needs to be gc-rooted while there is no JSAPI Call after that */
-		add_property(&user->properties, key, JS_GetStringBytes(property), EXTEND_STR, EXTEND_ISPUBLIC);
+		property = JS_EncodeString(cx, JS_ValueToString(cx, JS_ARGV(cx, vpn)[1]));
+		add_property(&user->properties, ckey, property, EXTEND_STR, EXTEND_ISPUBLIC);
+		
+		JS_free(cx, property);
 	}
+	
+	JS_free(cx, ckey);
 	
 	return JS_TRUE;
 }
@@ -994,12 +1147,13 @@ APE_JS_NATIVE(apeuser_sm_set_property)
 APE_JS_NATIVE(apemysql_sm_errorstring)
 //{
 	struct _ape_mysql_data *myhandle;
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
 	
 	if ((myhandle = JS_GetPrivate(cx, obj)) == NULL) {
 		return JS_TRUE;
 	}
 
-	*rval = STRING_TO_JSVAL(JS_NewStringCopyZ(cx, mysac_advance_error(myhandle->my)));
+	JS_SET_RVAL(cx, vpn, STRING_TO_JSVAL(JS_NewStringCopyZ(cx, mysac_advance_error(myhandle->my))));
 	
 	return JS_TRUE;
 }
@@ -1007,34 +1161,38 @@ APE_JS_NATIVE(apemysql_sm_errorstring)
 APE_JS_NATIVE(apemysql_sm_insert_id)
 //{
 	struct _ape_mysql_data *myhandle;
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
 	
 	if ((myhandle = JS_GetPrivate(cx, obj)) == NULL) {
 		return JS_TRUE;
 	}
 
-	*rval = INT_TO_JSVAL(mysac_insert_id(myhandle->my));
+	JS_SET_RVAL(cx, vpn, INT_TO_JSVAL(mysac_insert_id(myhandle->my)));
 	
 	return JS_TRUE;
 }
 
 APE_JS_NATIVE(apemysql_escape)
 //{
-
-	char *input_c, *escaped;
+	JSString *input_c;
+	char *cinput_c, *escaped;
 	unsigned long int len;
 	
-	if (!JS_ConvertArguments(cx, 1, argv, "s", &input_c)) {
+	if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "S", &input_c)) {
 		return JS_TRUE;
 	}
 	
-	len = strlen(input_c);
+	cinput_c = JS_EncodeString(cx, input_c);
+	
+	len = strlen(cinput_c);
 	escaped = xmalloc(sizeof(char) * (len*2+1));
 	
-	len = mysql_escape_string(escaped, input_c, len);
+	len = mysql_escape_string(escaped, cinput_c, len);
 	
-	*rval = STRING_TO_JSVAL(JS_NewStringCopyN(cx, escaped, len));
+	JS_SET_RVAL(cx, vpn, STRING_TO_JSVAL(JS_NewStringCopyN(cx, escaped, len)));
 	
 	free(escaped);
+	JS_free(cx, cinput_c);
 	
 	return JS_TRUE;
 }
@@ -1044,19 +1202,20 @@ APE_JS_NATIVE(apemysql_sm_query)
 	JSString *query;
 	struct _ape_mysql_data *myhandle;
 	jsval callback;
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
 	
 	if ((myhandle = JS_GetPrivate(cx, obj)) == NULL) {
 		return JS_TRUE;
 	}
 	
-	if (!JS_ConvertArguments(cx, 1, argv, "S", &query)) {
+	if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "S", &query)) {
 		return JS_TRUE;
 	}
-	if (!JS_ConvertValue(cx, argv[1], JSTYPE_FUNCTION, &callback)) {
+	if (!JS_ConvertValue(cx, JS_ARGV(cx, vpn)[1], JSTYPE_FUNCTION, &callback)) {
 		return JS_TRUE;
 	}
 
-	apemysql_push_queue(myhandle, xstrdup(JS_GetStringBytes(query)), JS_GetStringLength(query), callback);
+	apemysql_push_queue(myhandle, JS_EncodeString(cx, query), JS_GetStringEncodingLength(cx, query), callback);
 	
 	return JS_TRUE;
 }
@@ -1203,80 +1362,80 @@ static void apelogfile_finalize(JSContext *cx, JSObject *obj)
 }
 
 static JSFunctionSpec apesocket_funcs[] = {
-    	JS_FS("write",   apesocket_write,	1, 0, 0),
-	JS_FS("close",   apesocket_close,	0, 0, 0),
-    	JS_FS_END
+	JS_FS("write",   apesocket_write,	1, 0),
+	JS_FS("close",   apesocket_close,	0, 0),
+	JS_FS_END
 };
 
 static JSFunctionSpec apesocketserver_funcs[] = {
-	JS_FS("close",   apesocketserver_close,	0, 0, 0),
-    	JS_FS_END
+	JS_FS("close",   apesocketserver_close,	0, 0),
+	JS_FS_END
 };
 
 static JSFunctionSpec apesocketclient_funcs[] = {
-    	JS_FS("write",   apesocketclient_write,	1, 0, 0),
-	JS_FS("close",   apesocketclient_close,	0, 0, 0),
-    	JS_FS_END
+	JS_FS("write",   apesocketclient_write,	1, 0),
+	JS_FS("close",   apesocketclient_close,	0, 0),
+	JS_FS_END
 };
 
 static JSFunctionSpec apesocket_client_funcs[] = {
-	JS_FS("onAccept", ape_sm_stub, 0, 0, 0),
-	JS_FS("onRead", ape_sm_stub, 0, 0, 0),
-	JS_FS("onDisconnect", ape_sm_stub, 0, 0, 0),
-	JS_FS("onConnect", ape_sm_stub, 0, 0, 0),
+	JS_FS("onAccept", ape_sm_stub, 0, 0),
+	JS_FS("onRead", ape_sm_stub, 0, 0),
+	JS_FS("onDisconnect", ape_sm_stub, 0, 0),
+	JS_FS("onConnect", ape_sm_stub, 0, 0),
 	JS_FS_END
 };
 
 static JSFunctionSpec apeuser_funcs[] = {
-	JS_FS("getProperty", apeuser_sm_get_property, 1, 0, 0),
-	JS_FS("setProperty", apeuser_sm_set_property, 2, 0, 0),
-	JS_FS("join", apeuser_sm_join, 1, 0, 0),
-	JS_FS("left", apeuser_sm_left, 1, 0, 0),
-	JS_FS("quit", apeuser_sm_quit, 0, 0, 0),
+	JS_FS("getProperty", apeuser_sm_get_property, 1, 0),
+	JS_FS("setProperty", apeuser_sm_set_property, 2, 0),
+	JS_FS("join", apeuser_sm_join, 1, 0),
+	JS_FS("left", apeuser_sm_left, 1, 0),
+	JS_FS("quit", apeuser_sm_quit, 0, 0),
 	JS_FS_END
 };
 
 static JSFunctionSpec apechannel_funcs[] = {
-	JS_FS("getProperty", apechannel_sm_get_property, 1, 0, 0),
-	JS_FS("setProperty", apechannel_sm_set_property, 2, 0, 0),
-	JS_FS("isInteractive", apechannel_sm_isinteractive, 1, 0, 0),
+	JS_FS("getProperty", apechannel_sm_get_property, 1, 0),
+	JS_FS("setProperty", apechannel_sm_set_property, 2, 0),
+	JS_FS("isInteractive", apechannel_sm_isinteractive, 1, 0),
 	JS_FS_END
 };
 
 static JSFunctionSpec apepipe_funcs[] = {
-	JS_FS("sendRaw", apepipe_sm_send_raw, 3, 0, 0),
-	JS_FS("toObject", apepipe_sm_to_object, 0, 0, 0),
-	JS_FS("getProperty", apepipe_sm_get_property, 1, 0, 0),
-	JS_FS("setProperty", apepipe_sm_set_property, 2, 0, 0),
-	JS_FS("getParent", apepipe_sm_get_parent, 0, 0, 0),
-	JS_FS("onSend", ape_sm_stub, 0, 0, 0),
+	JS_FS("sendRaw", apepipe_sm_send_raw, 3, 0),
+	JS_FS("toObject", apepipe_sm_to_object, 0, 0),
+	JS_FS("getProperty", apepipe_sm_get_property, 1, 0),
+	JS_FS("setProperty", apepipe_sm_set_property, 2, 0),
+	JS_FS("getParent", apepipe_sm_get_parent, 0, 0),
+	JS_FS("onSend", ape_sm_stub, 0, 0),
 	JS_FS_END
 };
 
 #ifdef _USE_MYSQL
 static JSFunctionSpec apemysql_funcs[] = {
-	JS_FS("onConnect", ape_sm_stub, 0, 0, 0),
-	JS_FS("onError", ape_sm_stub, 0, 0, 0),
-	JS_FS("errorString", apemysql_sm_errorstring, 0, 0, 0),
-	JS_FS("query", apemysql_sm_query, 2, 0, 0),
-	JS_FS("getInsertId", apemysql_sm_insert_id, 0, 0, 0),
+	JS_FS("onConnect", ape_sm_stub, 0, 0),
+	JS_FS("onError", ape_sm_stub, 0, 0),
+	JS_FS("errorString", apemysql_sm_errorstring, 0, 0),
+	JS_FS("query", apemysql_sm_query, 2, 0),
+	JS_FS("getInsertId", apemysql_sm_insert_id, 0, 0),
 	JS_FS_END
 };
 
 static JSFunctionSpec apemysql_funcs_static[] = {
-	JS_FS("escape", apemysql_escape, 1, 0, 0),
+	JS_FS("escape", apemysql_escape, 1, 0),
 	JS_FS_END
 };
 #endif
 
 
 static JSFunctionSpec cmdresponse_funcs[] = {
-	JS_FS("sendResponse", apepipe_sm_send_response, 3, 0, 0),
+	JS_FS("sendResponse", apepipe_sm_send_response, 3, 0),
 	JS_FS_END
 };
 
 static JSFunctionSpec apepipecustom_funcs[] = {
-	JS_FS("destroy", apepipe_sm_destroy, 0, 0, 0),
+	JS_FS("destroy", apepipe_sm_destroy, 0, 0),
 	JS_FS_END
 };
 
@@ -1295,12 +1454,12 @@ static JSObject *sm_ape_socket_to_jsobj(JSContext *cx, ape_socket *client)
 		
 		JSObject *obj = JS_NewObject(cx, &apesocket_class, NULL, NULL);
 		
-		JS_AddRoot(cx, &obj);
+		JS_AddObjectRoot(cx, &obj);
 
 		JS_DefineFunctions(cx, obj, apesocketclient_funcs);
 		JS_SetPrivate(cx, obj, client);
 		
-		JS_RemoveRoot(cx, &obj);
+		JS_RemoveObjectRoot(cx, &obj);
 		
 		client->data = obj;
 		return obj;
@@ -1334,7 +1493,7 @@ static void sm_sock_onaccept(ape_socket *client, acetables *g_ape)
 
 			obj = JS_NewObject(cb->asc->cx, &apesocket_class, NULL, NULL);
 			sock_obj->client_obj = obj;
-			JS_AddRoot(cb->asc->cx, &sock_obj->client_obj);
+			JS_AddObjectRoot(cb->asc->cx, &sock_obj->client_obj);
 			
 			JS_SetPrivate(cb->asc->cx, obj, cbcopy);
 			JS_DefineFunctions(cb->asc->cx, obj, apesocket_funcs);
@@ -1369,11 +1528,11 @@ static void sm_sock_ondisconnect(ape_socket *client, acetables *g_ape)
 				
 				JS_CallFunctionName(cb->asc->cx, cb->server_obj, "onDisconnect", 1, params, &rval);
 				JS_SetPrivate(cb->asc->cx, client_obj, (void *)NULL);
-				JS_RemoveRoot(cb->asc->cx, &((struct _ape_sock_js_obj *)cb->private)->client_obj);
+				JS_RemoveObjectRoot(cb->asc->cx, &((struct _ape_sock_js_obj *)cb->private)->client_obj);
 			} else {
 				JS_CallFunctionName(cb->asc->cx, cb->server_obj, "onDisconnect", 0, NULL, &rval);
 				JS_SetPrivate(cb->asc->cx, cb->server_obj, (void *)NULL);
-				JS_RemoveRoot(cb->asc->cx, &cb->server_obj);
+				JS_RemoveObjectRoot(cb->asc->cx, &cb->server_obj);
 			}
 			
 			free(cb->private);
@@ -1470,15 +1629,14 @@ static void sm_sock_onread(ape_socket *client, ape_buffer *buf, size_t offset, a
 /* Reporting error from JS compilation (parse error, etc...) */
 static void reportError(JSContext *cx, const char *message, JSErrorReport *report)
 {
-    fprintf(stderr, "%s:%u:%s\n",
-            report->filename ? report->filename : "<no filename>",
-            (unsigned int) report->lineno,
-            message);
+	fprintf(stderr, "%s:%u:%s\n",
+			report->filename ? report->filename : "<no filename>",
+			(unsigned int) report->lineno,
+			message);
 }
 
 static JSObject *ape_json_to_jsobj(JSContext *cx, json_item *head, JSObject *root)
 {
-	JS_EnterLocalRootScope(cx);
 	while (head != NULL) {
 		if (head->jchild.child == NULL && head->key.val != NULL) {
 			jsval jval;
@@ -1557,8 +1715,6 @@ static JSObject *ape_json_to_jsobj(JSContext *cx, json_item *head, JSObject *roo
 		}
 		head = head->next;
 	}
-
-	JS_LeaveLocalRootScope(cx);
 	return root;
 }
 
@@ -1575,7 +1731,7 @@ static void ape_sm_pipe_on_send_wrapper(transpipe *pipe, USERS *user, json_item 
 	
 	JS_CallFunctionName(cx, pipe->data, "onSend", 2, params, &rval);
 	
-	JS_RemoveRoot(cx, &obj);
+	JS_RemoveObjectRoot(cx, &obj);
 }
 
 /* Dispatch CMD to the corresponding javascript callback */
@@ -1601,10 +1757,10 @@ static unsigned int ape_sm_cmd_wrapper(callbackp *callbacki)
 		jsval jval;
 
 		obj = ape_json_to_jsobj(cx, head, NULL);
-		JS_AddRoot(cx, &obj);
+		JS_AddObjectRoot(cx, &obj);
 		
 		cb = JS_NewObject(cx, &cmdresponse_class, NULL, NULL);
-		JS_AddRoot(cx, &cb);
+		JS_AddObjectRoot(cx, &cb);
 		JS_DefineFunctions(cx, cb, cmdresponse_funcs);
 		
 		jval = STRING_TO_JSVAL(JS_NewStringCopyZ(cx, callbacki->host));
@@ -1641,8 +1797,8 @@ static unsigned int ape_sm_cmd_wrapper(callbackp *callbacki)
 			}
 		}
 		
-		JS_RemoveRoot(cx, &obj);
-		JS_RemoveRoot(cx, &cb);	
+		JS_RemoveObjectRoot(cx, &obj);
+		JS_RemoveObjectRoot(cx, &cb);	
 		
 	//JS_EndRequest(cx);
 	//JS_ClearContextThread(cx);
@@ -1662,11 +1818,11 @@ APE_JS_NATIVE(ape_sm_register_bad_cmd)
 
 	ascb = JS_malloc(cx, sizeof(*ascb));
 
-	if (!JS_ConvertValue(cx, argv[0], JSTYPE_FUNCTION, &ascb->func)) {
+	if (!JS_ConvertValue(cx, JS_ARGV(cx, vpn)[0], JSTYPE_FUNCTION, &ascb->func)) {
 		JS_free(cx, ascb);
 		return JS_TRUE;
 	}
-	JS_AddRoot(cx, &ascb->func);
+	JS_AddValueRoot(cx, &ascb->func);
 	
 	/* TODO : Effacer si déjà existant (RemoveRoot & co) */
 	ascb->next = NULL;
@@ -1690,34 +1846,37 @@ APE_JS_NATIVE(ape_sm_register_bad_cmd)
 
 APE_JS_NATIVE(ape_sm_register_cmd)
 //{
-	const char *cmd;
+	JSString *cmd;
 	JSBool needsessid;
+	char *ccmd;
 
 	ape_sm_callback *ascb;
 
-	*rval = JSVAL_NULL;
+	JS_SET_RVAL(cx, vpn, JSVAL_NULL);
 	
 	if (argc != 3) {
 		return JS_TRUE;
 	}
 	
-	if (!JS_ConvertArguments(cx, 2, argv, "sb", &cmd, &needsessid)) {
+	if (!JS_ConvertArguments(cx, 2, JS_ARGV(cx, vpn), "Sb", &cmd, &needsessid)) {
 		return JS_TRUE;
 	}
 	
 	ascb = JS_malloc(cx, sizeof(*ascb));
 
-	if (!JS_ConvertValue(cx, argv[2], JSTYPE_FUNCTION, &ascb->func)) {
+	if (!JS_ConvertValue(cx, JS_ARGV(cx, vpn)[2], JSTYPE_FUNCTION, &ascb->func)) {
 		JS_free(cx, ascb);
 		return JS_TRUE;
 	}
-	JS_AddRoot(cx, &ascb->func);
+	JS_AddValueRoot(cx, &ascb->func);
+	
+	ccmd = JS_EncodeString(cx, cmd);
 	
 	/* TODO : Effacer si déjà existant (RemoveRoot & co) */
 	ascb->next = NULL;
 	ascb->type = APE_CMD;
 	ascb->cx = cx;
-	ascb->callbackname = xstrdup(cmd);
+	ascb->callbackname = ccmd;
 	
 	if (asc->callbacks.head == NULL) {
 		asc->callbacks.head = ascb;
@@ -1727,46 +1886,50 @@ APE_JS_NATIVE(ape_sm_register_cmd)
 		asc->callbacks.foot = ascb;
 	}
 	
-	register_cmd(cmd, ape_sm_cmd_wrapper, (needsessid == JS_TRUE ? NEED_SESSID : NEED_NOTHING), g_ape);
+	register_cmd(ccmd, ape_sm_cmd_wrapper, (needsessid == JS_TRUE ? NEED_SESSID : NEED_NOTHING), g_ape);
 	
 	return JS_TRUE;
 }
 
 APE_JS_NATIVE(ape_sm_hook_cmd)
 //{
-	const char *cmd;
+	JSString *cmd;
+	char *ccmd;
 
 	ape_sm_callback *ascb;
 
-	*rval = JSVAL_NULL;
+	JS_SET_RVAL(cx, vpn, JSVAL_NULL);
 	
 	if (argc != 2) {
 		return JS_TRUE;
 	}
 	
-	if (!JS_ConvertArguments(cx, 1, argv, "s", &cmd)) {
+	if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "S", &cmd)) {
 		return JS_TRUE;
 	}
 
 	ascb = JS_malloc(cx, sizeof(*ascb));
 
-	if (!JS_ConvertValue(cx, argv[1], JSTYPE_FUNCTION, &ascb->func)) {
+	if (!JS_ConvertValue(cx, JS_ARGV(cx, vpn)[1], JSTYPE_FUNCTION, &ascb->func)) {
 		JS_free(cx, ascb);
 		return JS_TRUE;
 	}
+	
+	ccmd = JS_EncodeString(cx, cmd);
 
-	if (!register_hook_cmd(cmd, ape_sm_cmd_wrapper, ascb, g_ape)) {
+	if (!register_hook_cmd(ccmd, ape_sm_cmd_wrapper, ascb, g_ape)) {
 		/* CMD doesn't exist */
+		JS_free(cx, ccmd);
 		JS_free(cx, ascb);
 		return JS_TRUE;
 	}
-	JS_AddRoot(cx, &ascb->func);
+	JS_AddValueRoot(cx, &ascb->func);
 	
 	/* TODO : Effacer si déjà existant (RemoveRoot & co) */
 	ascb->next = NULL;
 	ascb->type = APE_HOOK;
 	ascb->cx = cx;
-	ascb->callbackname = xstrdup(cmd);
+	ascb->callbackname = ccmd; /* TODO: ccmd leak */
 	
 	if (asc->callbacks.head == NULL) {
 		asc->callbacks.head = ascb;
@@ -1781,8 +1944,9 @@ APE_JS_NATIVE(ape_sm_hook_cmd)
 
 APE_JS_NATIVE(ape_sm_include)
 //{
-	const char *file;
-	JSScript *bytecode;
+	JSString *file;
+	char *cfile;
+	JSObject *bytecode;
 	jsval frval;
 	char rpath[512];
 	
@@ -1790,13 +1954,17 @@ APE_JS_NATIVE(ape_sm_include)
 		return JS_TRUE;
 	}
 	
-	if (!JS_ConvertArguments(cx, 1, argv, "s", &file)) {
+	if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "S", &file)) {
 		return JS_TRUE;
 	}
 	
+	cfile = JS_EncodeString(cx, file);
+	
 	memset(rpath, '\0', sizeof(rpath));
 	strncpy(rpath, READ_CONF("scripts_path"), 255);
-	strncat(rpath, file, 255);
+	strncat(rpath, cfile, 255);
+	
+	JS_free(cx, cfile);
 	
 	if (!g_ape->is_daemon) {
 		printf("[JS] Loading script %s...\n", rpath);
@@ -1811,31 +1979,77 @@ APE_JS_NATIVE(ape_sm_include)
 		return JS_TRUE;
 	}
 
-	/* Adding to the root (prevent the script to be GC collected) */
-//	JS_AddNamedRoot(cx, &scriptObj, file);
-	
 	JS_ExecuteScript(cx, JS_GetGlobalObject(cx), bytecode, &frval);	
 	
 	return JS_TRUE;
 }
 
-APE_JS_NATIVE(ape_sm_b64_encode)
+APE_JS_NATIVE(ape_sm_readfile)
 //{
 	JSString *string;
-	char *b64;
+	char *cstring;
+	char *content;
+	FILE *fp;
+	int size = 2048;
+	int fsize = 0;
 	
 	if (argc != 1) {
         return JS_TRUE;
 	}
 	
-	if (!JS_ConvertArguments(cx, 1, argv, "S", &string)) {
+	if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "S", &string)) {
 		return JS_TRUE;
-	}	
+	}
+	cstring = JS_EncodeString(cx, string);
+	fp = fopen(cstring, "r");
+	if (fp == NULL) {
+	    return JS_TRUE;
+	}
 	
-	b64 = base64_encode(JS_GetStringBytes(string), JS_GetStringLength(string));
+	content = malloc(sizeof(char) * size);
 	
-	*rval = STRING_TO_JSVAL(JS_NewStringCopyZ(cx, b64));
+	while(!feof(fp)) {
+	    int tmp;
+	    if ((tmp = fread(content+fsize, sizeof(char), 2048, fp)) > 0) {
+	        fsize += tmp;
+	    }
+	    
+	    size += 2048;
+	    
+	    content = realloc(content, sizeof(char) * size);
+	}
 	
+	printf("Size : %d\n", fsize);
+	
+	JS_SET_RVAL(cx, vpn, STRING_TO_JSVAL(JS_NewStringCopyN(cx, content, fsize)));
+	
+	free(content);
+	JS_free(cx, cstring);
+	
+	return JS_TRUE;
+	
+}
+
+APE_JS_NATIVE(ape_sm_b64_encode)
+//{
+	JSString *string;
+	char *b64, *cstring;
+	
+	if (argc != 1) {
+		return JS_TRUE;
+	}
+	
+	if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "S", &string)) {
+		return JS_TRUE;
+	}
+	
+	cstring = JS_EncodeString(cx, string);
+	
+	b64 = base64_encode((unsigned char *)cstring, JS_GetStringEncodingLength(cx, string));
+	
+	JS_SET_RVAL(cx, vpn, STRING_TO_JSVAL(JS_NewStringCopyZ(cx, b64)));
+	
+	JS_free(cx, cstring);
 	free(b64);
 	
 	return JS_TRUE;
@@ -1845,26 +2059,28 @@ APE_JS_NATIVE(ape_sm_b64_encode)
 APE_JS_NATIVE(ape_sm_b64_decode)
 //{
 	JSString *string;
-	char *b64;
+	char *b64, *cstring;
 	int length, len;
 	
 	if (argc != 1) {
-        return JS_TRUE;
+		return JS_TRUE;
 	}
 	
-	if (!JS_ConvertArguments(cx, 1, argv, "S", &string)) {
+	if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "S", &string)) {
 		return JS_TRUE;
 	}	
 	
-	length = JS_GetStringLength(string);
+	length = JS_GetStringEncodingLength(cx, string);
+	cstring = JS_EncodeString(cx, string);
 	
 	b64 = xmalloc(length+1);
-	len = base64_decode(b64, JS_GetStringBytes(string), length+1);
+	len = base64_decode((unsigned char *)b64, cstring, length+1);
 	
 	if (len != -1) {
-		*rval = STRING_TO_JSVAL(JS_NewStringCopyN(cx, b64, len));
+		JS_SET_RVAL(cx, vpn, STRING_TO_JSVAL(JS_NewStringCopyN(cx, b64, len)));
 	}
 	
+	JS_free(cx, cstring);
 	free(b64);
 	
 	return JS_TRUE;
@@ -1874,19 +2090,26 @@ APE_JS_NATIVE(ape_sm_b64_decode)
 APE_JS_NATIVE(ape_sm_sha1_bin)
 //{
 	JSString *string, *hmac = NULL;
+	char *cstring, *chmac;
 	unsigned char digest[20];
 
-	if (!JS_ConvertArguments(cx, argc, argv, "S/S", &string, &hmac)) {
+	if (!JS_ConvertArguments(cx, argc, JS_ARGV(cx, vpn), "S/S", &string, &hmac)) {
 		return JS_TRUE;
 	}
 	
+	cstring = JS_EncodeString(cx, string);
+	
 	if (hmac == NULL) {
-		sha1_csum((unsigned char *)JS_GetStringBytes(string), JS_GetStringLength(string), digest);
+		sha1_csum((unsigned char *)cstring, JS_GetStringEncodingLength(cx, string), digest);
 	} else {
-		sha1_hmac((unsigned char *)JS_GetStringBytes(hmac), JS_GetStringLength(hmac), (unsigned char *)JS_GetStringBytes(string), JS_GetStringLength(string), digest);
+		chmac = JS_EncodeString(cx, hmac);
+		sha1_hmac((unsigned char *)chmac, JS_GetStringEncodingLength(cx, hmac), (unsigned char *)cstring, JS_GetStringEncodingLength(cx, string), digest);
+		JS_free(cx, chmac);
 	}
 	
-	*rval = STRING_TO_JSVAL(JS_NewStringCopyN(cx, (char *)digest, 20));
+	JS_SET_RVAL(cx, vpn, STRING_TO_JSVAL(JS_NewStringCopyN(cx, (char *)digest, 20)));
+	
+	JS_free(cx, cstring);
 	
 	return JS_TRUE;	
 }
@@ -1895,57 +2118,79 @@ APE_JS_NATIVE(ape_sm_sha1_str)
 //{
 	JSString *string, *hmac = NULL;
 	unsigned char digest[20];
+	char *cstring, *chmac;
 	char output[40];
 	unsigned int i;
 	
-	if (!JS_ConvertArguments(cx, argc, argv, "S/S", &string, &hmac)) {
+	if (!JS_ConvertArguments(cx, argc, JS_ARGV(cx, vpn), "S/S", &string, &hmac)) {
 		return JS_TRUE;
 	}
 
+	cstring = JS_EncodeString(cx, string);
+	
 	if (hmac == NULL) {
-		sha1_csum((unsigned char *)JS_GetStringBytes(string), JS_GetStringLength(string), digest);
+		sha1_csum((unsigned char *)cstring, JS_GetStringEncodingLength(cx, string), digest);
 	} else {
-		sha1_hmac((unsigned char *)JS_GetStringBytes(hmac), JS_GetStringLength(hmac), (unsigned char *)JS_GetStringBytes(string), JS_GetStringLength(string), digest);
+		chmac = JS_EncodeString(cx, hmac);
+		sha1_hmac((unsigned char *)chmac, JS_GetStringEncodingLength(cx, hmac), (unsigned char *)cstring, JS_GetStringEncodingLength(cx, string), digest);
+		JS_free(cx, chmac);
 	}
 	
 	for (i = 0; i < 20; i++) {
 		sprintf(output + (i*2), "%02x", digest[i]);
 	}
 	
-	*rval = STRING_TO_JSVAL(JS_NewStringCopyN(cx, output, 40));
+	JS_SET_RVAL(cx, vpn, STRING_TO_JSVAL(JS_NewStringCopyN(cx, output, 40)));
+	
+	JS_free(cx, cstring);
 	
 	return JS_TRUE;	
 }
 
 APE_JS_NATIVE(ape_sm_mkchan)
 //{
-	char *chan_name;
+	JSString *chan_name;
+	char *cchan_name;
 	CHANNEL *new_chan;
 	
-	if (!JS_ConvertArguments(cx, 1, argv, "s", &chan_name) || getchan(chan_name, g_ape) != NULL) {
+	if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "S", &chan_name)) {
 		return JS_TRUE;
 	}
 	
-	if ((new_chan = mkchan(chan_name, 0, g_ape)) != NULL) {
-		*rval = OBJECT_TO_JSVAL(APECHAN_TO_JSOBJ(new_chan));
+	cchan_name = JS_EncodeString(cx, chan_name);
+	
+	if (getchan(cchan_name, g_ape) != NULL) {
+		JS_free(cx, cchan_name);
+		return JS_TRUE;
 	}
+	
+	if ((new_chan = mkchan(cchan_name, 0, g_ape)) != NULL) {
+		JS_SET_RVAL(cx, vpn, OBJECT_TO_JSVAL(APECHAN_TO_JSOBJ(new_chan)));
+	}
+	
+	JS_free(cx, cchan_name);
 	
 	return JS_TRUE;
 }
 
 APE_JS_NATIVE(ape_sm_rmchan)
 //{
-	char *chan_name;
+	JSString *chan_name;
+	char *cchan_name;
 	CHANNEL *chan;
 	JSObject *chan_obj;
 
-	if (JSVAL_IS_STRING(argv[0])) {
-		JS_ConvertArguments(cx, 1, argv, "s", &chan_name);
-		if ((chan = getchan(chan_name, g_ape)) == NULL) {
+	if (JSVAL_IS_STRING(JS_ARGV(cx, vpn)[0])) {
+		JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "S", &chan_name);
+		cchan_name = JS_EncodeString(cx, chan_name);
+		
+		if ((chan = getchan(cchan_name, g_ape)) == NULL) {
+			JS_free(cx, cchan_name);
 			return JS_TRUE;
 		}
-	} else if (JSVAL_IS_OBJECT(argv[0])) {
-		JS_ConvertArguments(cx, 1, argv, "o", &chan_obj);
+		JS_free(cx, cchan_name);
+	} else if (JSVAL_IS_OBJECT(JS_ARGV(cx, vpn)[0])) {
+		JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "o", &chan_obj);
 		if (!JS_InstanceOf(cx, chan_obj, &channel_class, 0) || (chan = JS_GetPrivate(cx, chan_obj)) == NULL) {
 			return JS_TRUE;
 		}
@@ -1965,7 +2210,7 @@ APE_JS_NATIVE(ape_sm_adduser)
 	RAW *newraw;
 	json_item *jstr = NULL;
 		
-	if (!JS_ConvertArguments(cx, 1, argv, "o", &user)) {
+	if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "o", &user)) {
 		return JS_TRUE;
 	}
 	if (JS_InstanceOf(cx, user, &user_class, 0) == JS_FALSE) {
@@ -2011,32 +2256,32 @@ APE_JS_NATIVE(ape_sm_adduser)
 
 APE_JS_NATIVE(ape_sm_addEvent)
 //{
-	const char *event;
+	JSString *event;
 
 	ape_sm_callback *ascb;
 
-	*rval = JSVAL_NULL;
+	JS_SET_RVAL(cx, vpn, JSVAL_NULL);
 	
 	if (argc != 2) {
 		return JS_TRUE;
 	}
 	
-	if (!JS_ConvertArguments(cx, 1, argv, "s", &event)) {
+	if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "S", &event)) {
 		return JS_TRUE;
 	}
 
 	ascb = JS_malloc(cx, sizeof(*ascb));
 
-	if (!JS_ConvertValue(cx, argv[1], JSTYPE_FUNCTION, &ascb->func)) {
+	if (!JS_ConvertValue(cx, JS_ARGV(cx, vpn)[1], JSTYPE_FUNCTION, &ascb->func)) {
 		JS_free(cx, ascb);
 		return JS_TRUE;
 	}
-	JS_AddRoot(cx, &ascb->func);
+	JS_AddValueRoot(cx, &ascb->func);
 
 	ascb->next = NULL;
 	ascb->type = APE_EVENT;
 	ascb->cx = cx;
-	ascb->callbackname = xstrdup(event);
+	ascb->callbackname = JS_EncodeString(cx, event);
 	
 	if (asc->callbacks.head == NULL) {
 		asc->callbacks.head = ascb;
@@ -2061,10 +2306,10 @@ static JSObject *get_pipe_object(const char *pubid, transpipe *pipe, JSContext *
 				return NULL;
 			}
 			
-			JS_AddRoot(cx, &jspipe);
+			JS_AddObjectRoot(cx, &jspipe);
 			//JS_DefineFunctions(cx, jspipe, apepipe_funcs);
 			JS_SetPrivate(cx, jspipe, pipe);
-			JS_RemoveRoot(cx, &jspipe);
+			JS_RemoveObjectRoot(cx, &jspipe);
 			
 			pipe->data = jspipe;
 		}
@@ -2077,108 +2322,147 @@ static JSObject *get_pipe_object(const char *pubid, transpipe *pipe, JSContext *
 
 APE_JS_NATIVE(ape_sm_get_user_by_pubid)
 //{
-	char *pubid;
+	JSString *pubid;
+	char *cpubid;
 	USERS *user;
 	
-	*rval = JSVAL_NULL;
+	JS_SET_RVAL(cx, vpn, JSVAL_NULL);
 	
-	if (!JS_ConvertArguments(cx, 1, argv, "s", &pubid)) {
+	if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "S", &pubid)) {
 		return JS_TRUE;
 	}
 	
-	if ((user = seek_user_simple(pubid, g_ape)) != NULL) {
-		*rval = OBJECT_TO_JSVAL(APEUSER_TO_JSOBJ(user));
+	cpubid = JS_EncodeString(cx, pubid);
+	
+	if ((user = seek_user_simple(cpubid, g_ape)) != NULL) {
+		JS_SET_RVAL(cx, vpn, OBJECT_TO_JSVAL(APEUSER_TO_JSOBJ(user)));
 	}
+	
+	JS_free(cx, cpubid);
 	
 	return JS_TRUE;	
 }
 
 APE_JS_NATIVE(ape_sm_get_channel_by_pubid)
 //{
-	char *pubid;
+	JSString *pubid;
+	char *cpubid;
 	CHANNEL *chan;
 	
-	*rval = JSVAL_NULL;
+	JS_SET_RVAL(cx, vpn, JSVAL_NULL);
 	
-	if (!JS_ConvertArguments(cx, 1, argv, "s", &pubid)) {
+	if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "S", &pubid)) {
 		return JS_TRUE;
 	}
 	
-	if ((chan = getchanbypubid(pubid, g_ape)) != NULL) {
-		*rval = OBJECT_TO_JSVAL(APECHAN_TO_JSOBJ(chan));
+	cpubid = JS_EncodeString(cx, pubid);
+	
+	if ((chan = getchanbypubid(cpubid, g_ape)) != NULL) {
+		JS_SET_RVAL(cx, vpn, OBJECT_TO_JSVAL(APECHAN_TO_JSOBJ(chan)));
 	}
+	
+	JS_free(cx, cpubid);
 	
 	return JS_TRUE;	
 }
 
 APE_JS_NATIVE(ape_sm_get_pipe)
 //{
-	char *pubid;
+	JSString *pubid;
+	char *cpubid;
 	JSObject *jspipe;
 	
-	*rval = JSVAL_NULL;
+	JS_SET_RVAL(cx, vpn, JSVAL_NULL);
 	
-	if (!JS_ConvertArguments(cx, 1, argv, "s", &pubid)) {
+	if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "S", &pubid)) {
 		return JS_TRUE;
 	}
 	
-	if ((jspipe = get_pipe_object(pubid, NULL, cx, g_ape)) != NULL) {
-		*rval = OBJECT_TO_JSVAL(jspipe);
+	cpubid = JS_EncodeString(cx, pubid);
+	
+	if ((jspipe = get_pipe_object(cpubid, NULL, cx, g_ape)) != NULL) {
+		JS_SET_RVAL(cx, vpn, OBJECT_TO_JSVAL(jspipe));
 	}
+	
+	JS_free(cx, cpubid);
+	
 	return JS_TRUE;
 }
 
 APE_JS_NATIVE(ape_sm_get_channel_by_name)
 //{
-	char *name;
+	JSString *name;
+	char *cname;
 	CHANNEL *chan;
 	
-	*rval = JSVAL_NULL;
+	JS_SET_RVAL(cx, vpn, JSVAL_NULL);
 	
-	if (!JS_ConvertArguments(cx, 1, argv, "s", &name)) {
+	if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "S", &name)) {
 		return JS_TRUE;
 	}
-	if ((chan = getchan(name, g_ape)) != NULL) {
-		*rval = OBJECT_TO_JSVAL(APECHAN_TO_JSOBJ(chan));
+	
+	cname = JS_EncodeString(cx, name);
+	
+	if ((chan = getchan(cname, g_ape)) != NULL) {
+		JS_SET_RVAL(cx, vpn, OBJECT_TO_JSVAL(APECHAN_TO_JSOBJ(chan)));
+		
+		JS_free(cx, cname);
 		
 		return JS_TRUE;
 	}
+	
+	JS_free(cx, cname);
 	
 	return JS_TRUE;
 }
 
 APE_JS_NATIVE(ape_sm_config)
 //{
-	char *file, *key, *value;
-	*rval = JSVAL_NULL;
+	JSString *file, *key;
+	char *value, *cfile, *ckey;
+	JS_SET_RVAL(cx, vpn, JSVAL_NULL);
 	plug_config *config;
 	char conf_file[1024];
 	
-	if (!JS_ConvertArguments(cx, 2, argv, "ss", &file, &key)) {
+	if (!JS_ConvertArguments(cx, 2, JS_ARGV(cx, vpn), "SS", &file, &key)) {
 		return JS_TRUE;
 	}
-	sprintf(conf_file, "%s%s", CONFIG_VAL(Config, modules_conf, g_ape->srv), file);
+	
+	cfile = JS_EncodeString(cx, file);
+	ckey = JS_EncodeString(cx, key);
+	
+	sprintf(conf_file, "%s%s", CONFIG_VAL(Config, modules_conf, g_ape->srv), cfile);
 	
 	config = plugin_parse_conf(conf_file);
-	value = plugin_get_conf(config, key);
+	value = plugin_get_conf(config, ckey);
 	
-	*rval = STRING_TO_JSVAL(JS_NewStringCopyZ(cx, value));
+	JS_SET_RVAL(cx, vpn, STRING_TO_JSVAL(JS_NewStringCopyZ(cx, value)));
+	
+	JS_free(cx, cfile);
+	JS_free(cx, ckey);
 	
 	return JS_TRUE;
 }
 
 APE_JS_NATIVE(ape_sm_mainconfig)
 //{
-	char *key, *section, *value;
-	*rval = JSVAL_NULL;
+	JSString *section, *key;
+	char *ckey, *csection, *value;
+	JS_SET_RVAL(cx, vpn, JSVAL_NULL);
 	
-	if (!JS_ConvertArguments(cx, 2, argv, "ss", &section, &key)) {
+	if (!JS_ConvertArguments(cx, 2, JS_ARGV(cx, vpn), "SS", &section, &key)) {
 		return JS_TRUE;
 	}
+	
+	csection = JS_EncodeString(cx, section);
+	ckey = JS_EncodeString(cx, key);
 
-	value = ape_config_get_key(ape_config_get_section(g_ape->srv, section), key);
+	value = ape_config_get_key(ape_config_get_section(g_ape->srv, csection), ckey);
 
-	*rval = (value != NULL ? STRING_TO_JSVAL(JS_NewStringCopyZ(cx, value)) : JSVAL_FALSE);
+	JS_SET_RVAL(cx, vpn, (value != NULL ? STRING_TO_JSVAL(JS_NewStringCopyZ(cx, value)) : JSVAL_FALSE));
+
+	JS_free(cx, csection);
+	JS_free(cx, ckey);
 
 	return JS_TRUE;
 }
@@ -2214,7 +2498,7 @@ static void ape_sm_timer_wrapper(struct _ape_sm_timer *params, int *last)
 			}
 		}
 		if (*last) {
-			JS_RemoveRoot(params->cx, &params->func);
+			JS_RemoveValueRoot(params->cx, &params->func);
 			
 			if (params->argv != NULL) {
 				free(params->argv);
@@ -2230,6 +2514,7 @@ APE_JS_NATIVE(ape_sm_set_timeout)
 	struct _ape_sm_timer *params;
 	struct _ticks_callback *timer;
 	int ms, i;
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
 	
 	params = JS_malloc(cx, sizeof(*params));
 	
@@ -2245,25 +2530,25 @@ APE_JS_NATIVE(ape_sm_set_timeout)
 	
 	params->argv = (argc-2 ? JS_malloc(cx, sizeof(*params->argv) * argc-2) : NULL);
 	
-	if (!JS_ConvertValue(cx, argv[0], JSTYPE_FUNCTION, &params->func)) {
+	if (!JS_ConvertValue(cx, JS_ARGV(cx, vpn)[0], JSTYPE_FUNCTION, &params->func)) {
 		return JS_TRUE;
 	}
 
-	if (!JS_ConvertArguments(cx, 1, &argv[1], "i", &ms)) {
+	if (!JS_ConvertArguments(cx, 1, &JS_ARGV(cx, vpn)[1], "i", &ms)) {
 		return JS_TRUE;
 	}
 	
-	JS_AddRoot(cx, &params->func);
+	JS_AddValueRoot(cx, &params->func);
 	
 	for (i = 0; i < argc-2; i++) {
-		params->argv[i] = argv[i+2];
+		params->argv[i] = JS_ARGV(cx, vpn)[i+2];
 	}
 	
 	timer = add_timeout(ms, ape_sm_timer_wrapper, params, g_ape);
 	timer->protect = 0;
 	params->timer = timer;
 	
-	*rval = INT_TO_JSVAL(timer->identifier);
+	JS_SET_RVAL(cx, vpn, INT_TO_JSVAL(timer->identifier));
 	
 	return JS_TRUE;
 	
@@ -2289,25 +2574,25 @@ APE_JS_NATIVE(ape_sm_set_interval)
 	
 	params->argv = (argc-2 ? JS_malloc(cx, sizeof(*params->argv) * argc-2) : NULL);
 	
-	if (!JS_ConvertValue(cx, argv[0], JSTYPE_FUNCTION, &params->func)) {
+	if (!JS_ConvertValue(cx, JS_ARGV(cx, vpn)[0], JSTYPE_FUNCTION, &params->func)) {
 		return JS_TRUE;
 	}
 
-	if (!JS_ConvertArguments(cx, 1, &argv[1], "i", &ms)) {
+	if (!JS_ConvertArguments(cx, 1, &JS_ARGV(cx, vpn)[1], "i", &ms)) {
 		return JS_TRUE;
 	}
 	
-	JS_AddRoot(cx, &params->func);
+	JS_AddValueRoot(cx, &params->func);
 	
 	for (i = 0; i < argc-2; i++) {
-		params->argv[i] = argv[i+2];
+		params->argv[i] = JS_ARGV(cx, vpn)[i+2];
 	}
 	
 	timer = add_periodical(ms, 0, ape_sm_timer_wrapper, params, g_ape);
 	timer->protect = 0;
 	params->timer = timer;
 	
-	*rval = INT_TO_JSVAL(timer->identifier);
+	JS_SET_RVAL(cx, vpn, INT_TO_JSVAL(timer->identifier));
 	
 	return JS_TRUE;	
 }
@@ -2318,7 +2603,7 @@ APE_JS_NATIVE(ape_sm_clear_timeout)
 	struct _ape_sm_timer *params;
 	struct _ticks_callback *timer;
 	
-	if (!JS_ConvertArguments(cx, 1, argv, "i", &identifier)) {
+	if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "i", &identifier)) {
 		return JS_TRUE;
 	}
 	
@@ -2330,31 +2615,39 @@ APE_JS_NATIVE(ape_sm_clear_timeout)
 	return JS_TRUE;
 }
 
+
 APE_JS_NATIVE(ape_sm_echo)
 //{
+	char *cstring;
 	JSString *string;
-	*rval = JSVAL_NULL;
-	
-	if (!JS_ConvertArguments(cx, 1, argv, "S", &string)) {
+	JS_SET_RVAL(cx, vpn, JSVAL_NULL);
+
+	if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "S", &string)) {
 		return JS_TRUE;
 	}
+
+	cstring = JS_EncodeString(cx, string);
 	
 	if (!g_ape->is_daemon) {
-		fwrite(JS_GetStringBytes(string), 1, JS_GetStringLength(string), stdout);
-		fwrite("\n", 1, 1, stdout);
+		fwrite(cstring, sizeof(char), JS_GetStringEncodingLength(cx, string), stdout);
+		//fwrite("\n", sizeof(char), 1, stdout);
 	} else {
 		ape_log(APE_INFO, __FILE__, __LINE__, g_ape, 
-			"JavaScript : %s", JS_GetStringBytes(string));
+			"JavaScript : %s", cstring);
 	}
+	
+	JS_free(cx, cstring);
 	
 	return JS_TRUE;
 }
 
+#if 0
 APE_JS_NATIVE(ape_sm_raw_constructor)
 //{
 	char *rawname;
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
 	
-	if (!JS_ConvertArguments(cx, 1, argv, "s", &rawname)) {
+	if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "s", &rawname)) {
 		return JS_TRUE;
 	}
 	
@@ -2362,21 +2655,26 @@ APE_JS_NATIVE(ape_sm_raw_constructor)
 	
 	return JS_TRUE;
 }
-
+#endif
 
 APE_JS_NATIVE(ape_sm_sockclient_constructor)
 //{
 	int port;
-	char *ip;
+	char *cip;
+	JSString *ip;
 	JSObject *options = NULL;
+	JSObject *obj = JS_NewObjectForConstructor(cx, vpn);
 	ape_socket *pattern;
 	jsval vp;
 	struct _ape_sock_callbacks *cbcopy;
 	struct _ape_sock_js_obj *sock_obj;
-	if (!JS_ConvertArguments(cx, argc, argv, "is/o", &port, &ip, &options)) {
+	
+	if (!JS_ConvertArguments(cx, argc, JS_ARGV(cx, vpn), "iS/o", &port, &ip, &options)) {
 		return JS_TRUE;
 	}
-
+	
+	cip = JS_EncodeString(cx, ip);
+	
 	sock_obj = xmalloc(sizeof(*sock_obj));
 	sock_obj->client_obj = NULL;
 	sock_obj->client = NULL;
@@ -2388,12 +2686,14 @@ APE_JS_NATIVE(ape_sm_sockclient_constructor)
 	cbcopy->server_obj = obj;
 	cbcopy->state = 1;
 	
-	JS_AddRoot(cx, &cbcopy->server_obj);
+	JS_AddObjectRoot(cx, &cbcopy->server_obj);
 	
 	pattern = xmalloc(sizeof(*pattern));
 	pattern->callbacks.on_connect = sm_sock_onconnect;
 	pattern->callbacks.on_disconnect = sm_sock_ondisconnect;
-	if (options != NULL && JS_GetProperty(cx, options, "flushlf", &vp) && JSVAL_IS_BOOLEAN(vp) && vp == JSVAL_TRUE) {
+	pattern->callbacks.on_data_completly_sent = NULL;
+
+	if (options != NULL && JS_GetProperty(cx, options, "flushlf", &vp) && JSVAL_IS_BOOLEAN(vp) && JSVAL_TO_BOOLEAN(vp)) {
 		pattern->callbacks.on_read_lf = sm_sock_onread_lf;
 		pattern->callbacks.on_read = NULL;
 	} else {
@@ -2404,16 +2704,16 @@ APE_JS_NATIVE(ape_sm_sockclient_constructor)
 	pattern->attach = cbcopy;
 	JS_SetPrivate(cx, obj, cbcopy);
 	
-	ape_connect_name(ip, port, pattern, g_ape);
-
-/*	JS_DefineFunctions(cx, obj, apesocket_client_funcs);
-	JS_DefineFunctions(cx, obj, apesocket_funcs);*/
+	ape_connect_name(cip, port, pattern, g_ape);
+	
+	JS_free(cx, cip);
 	
 	return JS_TRUE;
 }
 
 APE_JS_NATIVE(ape_sm_pipe_constructor)
 //{
+	JSObject *obj = JS_NewObjectForConstructor(cx, vpn);
 	transpipe *pipe;
 	//JSObject *link;
 
@@ -2540,16 +2840,16 @@ static void mysac_query_success(struct _ape_mysql_data *myhandle, int code)
 		unsigned int nfield = mysac_field_count(myres), nrow = mysac_num_rows(myres), pos = 0;
 		JSObject *res = JS_NewArrayObject(myhandle->cx, nrow, NULL); /* First param [{},{},{},] */
 		
-		JS_AddRoot(myhandle->cx, &res);
+		JS_AddObjectRoot(myhandle->cx, &res);
 		
 		while (nrow && (row = mysac_fetch_row(myres)) != NULL) {
 			unsigned int i;
 			jsval currentval;
 			JSObject *elem = JS_NewObject(myhandle->cx, NULL, NULL, NULL);
-			JS_AddRoot(myhandle->cx, &elem);
+			JS_AddObjectRoot(myhandle->cx, &elem);
 			currentval = OBJECT_TO_JSVAL(elem);
 			JS_SetElement(myhandle->cx, res, pos, &currentval);
-			JS_RemoveRoot(myhandle->cx, &elem);
+			JS_RemoveObjectRoot(myhandle->cx, &elem);
 			for (i = 0; i < nfield; i++) {
 				int fieldlen, valuelen;
 				char *field, *val;
@@ -2561,7 +2861,8 @@ static void mysac_query_success(struct _ape_mysql_data *myhandle, int code)
 				field = ((MYSAC_RES *)myres)->cols[i].name;
 				val = row[i].blob;
 				
-				jval = STRING_TO_JSVAL(JS_NewStringCopyN(myhandle->cx, val, valuelen));
+				jval = (val == NULL ? JSVAL_NULL : STRING_TO_JSVAL(JS_NewStringCopyN(myhandle->cx, val, valuelen)));
+				
 				JS_SetProperty(myhandle->cx, elem, field, &jval);
 			}
 			pos++;
@@ -2569,7 +2870,7 @@ static void mysac_query_success(struct _ape_mysql_data *myhandle, int code)
 		params[0] = OBJECT_TO_JSVAL(res);
 		params[1] = JSVAL_FALSE;
 
-		JS_RemoveRoot(myhandle->cx, &res);
+		JS_RemoveObjectRoot(myhandle->cx, &res);
 		JS_CallFunctionValue(myhandle->cx, myhandle->jsmysql, queue->callback, 2, params, &rval);
 	} else {
 		params[0] = JSVAL_FALSE;
@@ -2577,9 +2878,9 @@ static void mysac_query_success(struct _ape_mysql_data *myhandle, int code)
 
 		JS_CallFunctionValue(myhandle->cx, myhandle->jsmysql, queue->callback, 2, params, &rval);
 	}
-	JS_RemoveRoot(myhandle->cx, &queue->callback);
+	JS_RemoveValueRoot(myhandle->cx, &queue->callback);
 	
-	free(queue->query);
+	JS_free(myhandle->cx, queue->query);
 	free(queue->res);
 	free(queue);
 		
@@ -2600,12 +2901,20 @@ static void apemysql_shift_queue(struct _ape_mysql_data *myhandle)
 {
 	struct _ape_mysql_queue *queue;
 	int ret;
+	int basemem = (1024*1024);
+	MYSAC_RES *res;
+	char *res_buf;
 	
+
 	if (myhandle->queue.head == NULL || myhandle->state != SQL_READY_FOR_QUERY) {
 		return;
 	}
-	
+	res_buf = xmalloc(sizeof(char) * basemem);
+	res = mysac_init_res(res_buf, basemem);		
+
 	queue = myhandle->queue.head;
+	queue->res = res;
+	
 	myhandle->state = SQL_NEED_QUEUE;
 	myhandle->data = queue;
 	
@@ -2632,19 +2941,14 @@ static void apemysql_shift_queue(struct _ape_mysql_data *myhandle)
 static struct _ape_mysql_queue *apemysql_push_queue(struct _ape_mysql_data *myhandle, char *query, unsigned int query_len, jsval callback)
 {
 	struct _ape_mysql_queue *nqueue;	
-	int basemem = (1024*1024);
-	MYSAC_RES *res;
-	char *res_buf = xmalloc(sizeof(char) * basemem);
-	
-	res = mysac_init_res(res_buf, basemem);
-	
+
 	nqueue = xmalloc(sizeof(*nqueue));
 	
 	nqueue->next = NULL;
 	nqueue->query = query;
 	nqueue->query_len = query_len;
 	nqueue->callback = callback;
-	nqueue->res = res;
+	nqueue->res = NULL;
 	
 	if (myhandle->queue.foot == NULL) {
 		myhandle->queue.head = nqueue;
@@ -2653,7 +2957,7 @@ static struct _ape_mysql_queue *apemysql_push_queue(struct _ape_mysql_data *myha
 	}
 	myhandle->queue.foot = nqueue;
 	
-	JS_AddRoot(myhandle->cx, &nqueue->callback);
+	JS_AddValueRoot(myhandle->cx, &nqueue->callback);
 
 	if (myhandle->queue.head->next == NULL && myhandle->state == SQL_READY_FOR_QUERY) {
 		
@@ -2665,26 +2969,33 @@ static struct _ape_mysql_queue *apemysql_push_queue(struct _ape_mysql_data *myha
 
 APE_JS_NATIVE(ape_sm_mysql_constructor)
 //{
-	char *host, *login, *pass, *db;
+	JSString *host, *login, *pass, *db;
+	char *chost, *clogin, *cpass, *cdb;
+	JSObject *obj = JS_NewObjectForConstructor(cx, vpn);
 	
 	MYSAC *my;
 	int fd;
 	struct _ape_mysql_data *myhandle;
 	
-	if (!JS_ConvertArguments(cx, argc, argv, "ssss", &host, &login, &pass, &db)) {
+	if (!JS_ConvertArguments(cx, argc, JS_ARGV(cx, vpn), "SSSS", &host, &login, &pass, &db)) {
 		return JS_TRUE;
 	}
 	
 	myhandle = xmalloc(sizeof(*myhandle));
+	
+	chost = JS_EncodeString(cx, host);
+	clogin = JS_EncodeString(cx, login);
+	cpass = JS_EncodeString(cx, pass);
+	cdb = JS_EncodeString(cx, db);
 
 	my = mysac_new(1024*1024);
-	mysac_setup(my, host, login, pass, db, 0);
+	mysac_setup(my, chost, clogin, cpass, cdb, 0);
 	mysac_connect(my);
 
 	myhandle->my = my;
 	myhandle->jsmysql = obj;
 	myhandle->cx = cx;
-	myhandle->db = xstrdup(db);
+	myhandle->db = xstrdup(cdb);
 	myhandle->data = NULL;
 	myhandle->callback = JSVAL_NULL;
 	myhandle->state = SQL_NEED_QUEUE;
@@ -2708,6 +3019,11 @@ APE_JS_NATIVE(ape_sm_mysql_constructor)
 	
 	//myhandle->to_call = mysac_connect;
 	myhandle->on_success = mysac_connect_success;
+	
+	JS_free(cx, chost);
+	JS_free(cx, clogin);
+	JS_free(cx, cpass);
+	JS_free(cx, cdb);
 
 	return JS_TRUE;
 }
@@ -2716,19 +3032,24 @@ APE_JS_NATIVE(ape_sm_mysql_constructor)
 APE_JS_NATIVE(ape_sm_sockserver_constructor)
 //{
 	int port;
-	char *ip;
+	char *cip;
+	JSString *ip;
 	JSObject *options = NULL;
 	ape_socket *server;
 	jsval vp;
+	JSObject *obj = JS_NewObjectForConstructor(cx, vpn);
 
-	if (!JS_ConvertArguments(cx, argc, argv, "is/o", &port, &ip, &options)) {
+	if (!JS_ConvertArguments(cx, argc, JS_ARGV(cx, vpn), "iS/o", &port, &ip, &options)) {
 		return JS_TRUE;
 	}
-
-	server = ape_listen(port, ip, g_ape);
 	
+	cip = JS_EncodeString(cx, ip);
+	
+	server = ape_listen(port, cip, g_ape);
+
 	if (server == NULL) {
-		*rval = JSVAL_FALSE;
+		JS_SET_RVAL(cx, vpn, JSVAL_FALSE);
+		JS_free(cx, cip);
 		return JS_TRUE;
 	}
 	
@@ -2739,10 +3060,10 @@ APE_JS_NATIVE(ape_sm_sockserver_constructor)
 	((struct _ape_sock_callbacks *)server->attach)->server_obj 		= obj;
 	((struct _ape_sock_callbacks *)server->attach)->state 			= 1;
 	
-	JS_AddRoot(cx, &((struct _ape_sock_callbacks *)server->attach)->server_obj);
+	JS_AddObjectRoot(cx, &((struct _ape_sock_callbacks *)server->attach)->server_obj);
 
 	/* check if flushlf is set to true in the optional object */
-	if (options != NULL && JS_GetProperty(cx, options, "flushlf", &vp) && JSVAL_IS_BOOLEAN(vp) && vp == JSVAL_TRUE) {
+	if (options != NULL && JS_GetProperty(cx, options, "flushlf", &vp) && JSVAL_IS_BOOLEAN(vp) && JSVAL_TO_BOOLEAN(vp)) {
 		server->callbacks.on_read_lf = sm_sock_onread_lf;
 	} else {
 		/* use the classic read callback */
@@ -2756,6 +3077,8 @@ APE_JS_NATIVE(ape_sm_sockserver_constructor)
 	JS_SetPrivate(cx, obj, server);
 
 	JS_DefineFunctions(cx, obj, apesocket_client_funcs);
+	
+	JS_free(cx, cip);
 		
 	return JS_TRUE;
 }
@@ -2766,13 +3089,13 @@ APE_JS_NATIVE(ape_sm_xorize)
 	char *ps1, *ps2, *final;
 	int i, len;
 	
-	if (!JS_ConvertArguments(cx, 2, argv, "SS", &s1, &s2)) {
+	if (!JS_ConvertArguments(cx, 2, JS_ARGV(cx, vpn), "SS", &s1, &s2)) {
 		return JS_TRUE;
 	}
 	
-	ps1 = JS_GetStringBytes(s1);
-	ps2 = JS_GetStringBytes(s2);
-	len = JS_GetStringLength(s1);
+	ps1 = JS_EncodeString(cx, s1);
+	ps2 = JS_EncodeString(cx, s2);
+	len = JS_GetStringEncodingLength(cx, s1);
 	
 	if (JS_GetStringLength(s2) < len) {
 		return JS_TRUE;
@@ -2784,57 +3107,61 @@ APE_JS_NATIVE(ape_sm_xorize)
 		final[i] = ps1[i] ^ ps2[i];
 	}
 	
-	*rval = STRING_TO_JSVAL(JS_NewStringCopyN(cx, final, len));
+	JS_SET_RVAL(cx, vpn, STRING_TO_JSVAL(JS_NewStringCopyN(cx, final, len)));
 	
 	free(final);
+	
+	JS_free(cx, ps1);
+	JS_free(cx, ps2);
 	
 	return JS_TRUE;
 }
 
 static JSFunctionSpec ape_funcs[] = {
-    JS_FS("addEvent",   ape_sm_addEvent,	2, 0, 0), /* Ape.addEvent('name', function() { }); */
-	JS_FS("registerCmd", ape_sm_register_cmd, 3, 0, 0),
-	JS_FS("registerHookBadCmd", ape_sm_register_bad_cmd, 1, 0, 0),
-	JS_FS("registerHookCmd", ape_sm_hook_cmd, 2, 0, 0),
-    JS_FS("log",  		ape_sm_echo,  		1, 0, 0),/* Ape.echo('stdout\n'); */
-	JS_FS("getPipe", ape_sm_get_pipe, 1, 0, 0),
-	JS_FS("getChannelByName", ape_sm_get_channel_by_name, 1, 0, 0),
-	JS_FS("getUserByPubid", ape_sm_get_user_by_pubid, 1, 0, 0),
-	JS_FS("getChannelByPubid", ape_sm_get_channel_by_pubid, 1, 0, 0),
-	JS_FS("config", ape_sm_config, 2, 0, 0),
-	JS_FS("mainConfig", ape_sm_mainconfig, 2, 0, 0),
-	JS_FS("setTimeout", ape_sm_set_timeout, 2, 0, 0),
-	JS_FS("setInterval", ape_sm_set_interval, 2, 0, 0),
-	JS_FS("clearTimeout", ape_sm_clear_timeout, 1, 0, 0),
-	JS_FS("clearInterval", ape_sm_clear_timeout, 1, 0, 0),
-	JS_FS("xorize", ape_sm_xorize, 2, 0, 0),
-	JS_FS("addUser", ape_sm_adduser, 1, 0, 0),
-	JS_FS("mkChan", ape_sm_mkchan, 1, 0, 0),
-	JS_FS("rmChan", ape_sm_rmchan, 1, 0, 0),
-    JS_FS_END
+	JS_FS("addEvent",   ape_sm_addEvent,	2, 0), /* Ape.addEvent('name', function() { }); */
+	JS_FS("registerCmd", ape_sm_register_cmd, 3, 0),
+	JS_FS("registerHookBadCmd", ape_sm_register_bad_cmd, 1, 0),
+	JS_FS("registerHookCmd", ape_sm_hook_cmd, 2, 0),
+	JS_FS("log",  		ape_sm_echo,  		1, 0),/* Ape.echo('stdout\n'); */
+	JS_FS("getPipe", ape_sm_get_pipe, 1, 0),
+	JS_FS("getChannelByName", ape_sm_get_channel_by_name, 1, 0),
+	JS_FS("getUserByPubid", ape_sm_get_user_by_pubid, 1, 0),
+	JS_FS("getChannelByPubid", ape_sm_get_channel_by_pubid, 1, 0),
+	JS_FS("config", ape_sm_config, 2, 0),
+	JS_FS("mainConfig", ape_sm_mainconfig, 2, 0),
+	JS_FS("setTimeout", ape_sm_set_timeout, 2, 0),
+	JS_FS("setInterval", ape_sm_set_interval, 2, 0),
+	JS_FS("clearTimeout", ape_sm_clear_timeout, 1, 0),
+	JS_FS("clearInterval", ape_sm_clear_timeout, 1, 0),
+	JS_FS("xorize", ape_sm_xorize, 2, 0),
+	JS_FS("addUser", ape_sm_adduser, 1, 0),
+	JS_FS("mkChan", ape_sm_mkchan, 1, 0),
+	JS_FS("rmChan", ape_sm_rmchan, 1, 0),
+	JS_FS("readfile", ape_sm_readfile, 1, 0),
+	JS_FS_END
 };
 
 static JSFunctionSpec global_funcs[] = {
-	JS_FS("include",   ape_sm_include,	1, 0, 0),
+	JS_FS("include",   ape_sm_include,	1, 0),
 	JS_FS_END
 };
 
 static JSFunctionSpec b64_funcs[] = {
-	JS_FS("encode",   ape_sm_b64_encode,	1, 0, 0),
-	JS_FS("decode",   ape_sm_b64_decode,	1, 0, 0),
+	JS_FS("encode",   ape_sm_b64_encode,	1, 0),
+	JS_FS("decode",   ape_sm_b64_decode,	1, 0),
 	JS_FS_END
 };
 
 static JSFunctionSpec sha1_funcs[] = {
-	JS_FS("str",   ape_sm_sha1_str,	1, 0, 0),
-	JS_FS("bin",   ape_sm_sha1_bin,	1, 0, 0),
+	JS_FS("str",   ape_sm_sha1_str,	1, 0),
+	JS_FS("bin",   ape_sm_sha1_bin,	1, 0),
 	JS_FS_END
 };
 
 
 static void ape_sm_define_ape(ape_sm_compiled *asc, JSContext *gcx, acetables *g_ape)
 {
-  JSObject *obj, *b64, *sha1, *sockclient, *sockserver, *custompipe, *user, *channel, *pipe, *subuser, *logfile;
+	JSObject *obj, *b64, *sha1, *sockclient, *sockserver, *custompipe, *user, *channel, *subuser;
 	#ifdef _USE_MYSQL
 	JSObject *jsmysql;
 	#endif
@@ -2845,16 +3172,13 @@ static void ape_sm_define_ape(ape_sm_compiled *asc, JSContext *gcx, acetables *g
 	user = JS_DefineObject(gcx, obj, "user", &user_class, NULL, 0);
 	subuser = JS_DefineObject(gcx, obj, "subuser", &subuser_class, NULL, 0);
 	channel = JS_DefineObject(gcx, obj, "channel", &channel_class, NULL, 0);
-	pipe = JS_DefineObject(gcx, obj, "pipe", &pipe_class, NULL, 0);
 	
 	JS_DefineFunctions(gcx, user, apeuser_funcs);
 	JS_DefineFunctions(gcx, channel, apechannel_funcs);
-	JS_DefineFunctions(gcx, pipe, apepipe_funcs);
 	
 	add_property(&g_ape->properties, "user_proto", user, EXTEND_POINTER, EXTEND_ISPRIVATE);
 	add_property(&g_ape->properties, "subuser_proto", subuser, EXTEND_POINTER, EXTEND_ISPRIVATE);
 	add_property(&g_ape->properties, "channel_proto", channel, EXTEND_POINTER, EXTEND_ISPRIVATE);
-	add_property(&g_ape->properties, "pipe_proto", pipe, EXTEND_POINTER, EXTEND_ISPRIVATE);
 	
 	JS_DefineFunctions(asc->cx, obj, ape_funcs);
 	JS_DefineFunctions(asc->cx, asc->global, global_funcs);
@@ -2862,12 +3186,16 @@ static void ape_sm_define_ape(ape_sm_compiled *asc, JSContext *gcx, acetables *g
 	JS_DefineFunctions(asc->cx, sha1, sha1_funcs);
 	
 	custompipe = JS_InitClass(asc->cx, obj, NULL, &pipe_class, ape_sm_pipe_constructor, 0, NULL, NULL, NULL, NULL);
+	add_property(&g_ape->properties, "pipe_proto", custompipe, EXTEND_POINTER, EXTEND_ISPRIVATE);
+	
 	sockserver = JS_InitClass(asc->cx, obj, NULL, &socketserver_class, ape_sm_sockserver_constructor, 2, NULL, NULL, NULL, NULL);
 	sockclient = JS_InitClass(asc->cx, obj, NULL, &socketclient_class, ape_sm_sockclient_constructor, 2, NULL, NULL, NULL, NULL);
 	#ifdef _USE_MYSQL
 	jsmysql = JS_InitClass(asc->cx, obj, NULL, &mysql_class, ape_sm_mysql_constructor, 2, NULL, NULL, NULL, apemysql_funcs_static);
 	#endif
+	#if 0
 	JS_InitClass(asc->cx, obj, NULL, &raw_class, ape_sm_raw_constructor, 1, NULL, NULL, NULL, NULL); /* Not used */
+	#endif
 	logfile = JS_InitClass(asc->cx, obj, NULL, &logfile_class, apelogfile_constructor, 1, NULL, NULL, NULL, NULL);
 
 	JS_DefineFunctions(asc->cx, sockclient, apesocket_client_funcs);
@@ -2907,34 +3235,46 @@ static int process_cmd_return(JSContext *cx, jsval rval, callbackp *callbacki, a
 			JS_GetProperty(cx, ret_opt, "name", &rawname);
 			JS_GetProperty(cx, ret_opt, "data", &data);						
 		
-			if (rawname != JSVAL_VOID && JSVAL_IS_STRING(rawname) && data != JSVAL_VOID && JSVAL_IS_OBJECT(data)) {
+			if (!JSVAL_IS_VOID(rawname) && JSVAL_IS_STRING(rawname) && !JSVAL_IS_VOID(data) && JSVAL_IS_OBJECT(data)) {
 				json_item *rawdata = NULL;
 				
 				if ((rawdata = jsobj_to_ape_json(cx, JSVAL_TO_OBJECT(data))) != NULL) {
-					RAW *newraw = forge_raw(JS_GetStringBytes(JSVAL_TO_STRING(rawname)), rawdata);
+					char *crawname;
+					RAW *newraw;
 					
+					crawname = JS_EncodeString(cx, JSVAL_TO_STRING(rawname));
+					
+					newraw = forge_raw(crawname, rawdata);
 					send_raw_inline(callbacki->client, callbacki->transport, newraw, g_ape);
-
+					
+					JS_free(cx, crawname);
 					return RETURN_NULL;
 				}			
 			}
 		} else {
 			unsigned int length = 0;
 			JS_GetArrayLength(cx, ret_opt, &length);
-			if (length == 2 && JS_GetElement(cx, ret_opt, 0, &vp[0]) && JS_GetElement(cx, ret_opt, 1, &vp[1]) && vp[0] != JSVAL_VOID && vp[1] != JSVAL_VOID) {
+			if (length == 2 && JS_GetElement(cx, ret_opt, 0, &vp[0]) && JS_GetElement(cx, ret_opt, 1, &vp[1]) && !JSVAL_IS_VOID(vp[0]) && !JSVAL_IS_VOID(vp[1])) {
 				if (JSVAL_IS_STRING(vp[1])) {
 					RAW *newraw;
 					JSString *code = JS_ValueToString(cx, vp[0]);
 					json_item *jlist = json_new_object();
+					char *ccode, *cvalue;
 					
 					if (callbacki->chl) {
 						json_set_property_intN(jlist, "chl", 3, callbacki->chl);
 					}
+					
+					ccode = JS_EncodeString(cx, code);
+					cvalue = JS_EncodeString(cx, JSVAL_TO_STRING(vp[1]));
 
-					json_set_property_strZ(jlist, "code", JS_GetStringBytes(code));
-					json_set_property_strZ(jlist, "value", JS_GetStringBytes(JSVAL_TO_STRING(vp[1])));
+					json_set_property_strZ(jlist, "code", ccode);
+					json_set_property_strZ(jlist, "value", cvalue);
 
 					newraw = forge_raw(RAW_ERR, jlist);
+					
+					JS_free(cx, ccode);
+					JS_free(cx, cvalue);
 					
 					if (callbacki->call_user != NULL) {
 						post_raw_sub(newraw, callbacki->call_subuser, g_ape);
@@ -3041,15 +3381,12 @@ static void init_module(acetables *g_ape) // Called when module is loaded
 {
 	JSRuntime *rt;
 	JSContext *gcx;
-
-	ape_sm_runtime *asr;
-	jsval rval;
-	int i;
 	char rpath[512];
 	
-	glob_t globbuf;
+	ape_sm_runtime *asr;
+	jsval rval;
 
-	rt = JS_NewRuntime(128L * 1024L * 1024L);
+	rt = JS_NewRuntime(8L * 1024L * 1024L);
 	
 	if (rt == NULL) {
 		printf("[ERR] Not enougth memory\n");
@@ -3061,98 +3398,89 @@ static void init_module(acetables *g_ape) // Called when module is loaded
 	
 	/* Setup a global context to store shared object */
 	gcx = JS_NewContext(rt, 8192);
-	JS_SetOptions(gcx, JSOPTION_VAROBJFIX | JSOPTION_JIT);
-	JS_SetVersion(gcx, JSVERSION_LATEST);
-	JS_SetErrorReporter(gcx, reportError);
-	JS_InitStandardClasses(gcx, JS_NewObject(gcx, &global_class, NULL, NULL));
 	
 	add_property(&g_ape->properties, "sm_context", gcx, EXTEND_POINTER, EXTEND_ISPRIVATE);
 	add_property(&g_ape->properties, "sm_runtime", asr, EXTEND_POINTER, EXTEND_ISPRIVATE);
+
+	ape_sm_compiled *asc = xmalloc(sizeof(*asc));
 	
 	memset(rpath, '\0', sizeof(rpath));
 	strncpy(rpath, READ_CONF("scripts_path"), 256);
-	strcat(rpath, "/*.ape.js");
+	strcat(rpath, "/main.ape.js");
 	
-	glob(rpath, 0, NULL, &globbuf);
+	asc->filename = (void *)xstrdup(rpath);
+
+	asc->cx = gcx;
 	
-	for (i = 0; i < globbuf.gl_pathc; i++) {
-		ape_sm_compiled *asc = xmalloc(sizeof(*asc));
+	#if 0
+	JS_SetGCZeal(asc->cx, 2);
+	#endif
 	
-		asc->filename = (void *)xstrdup(globbuf.gl_pathv[i]);
-
-		asc->cx = JS_NewContext(rt, 8192);
-		//JS_SetGCZeal(asc->cx, 2);
-		
-		if (asc->cx == NULL) {
-			free(asc->filename);
-			free(asc);
-			continue;
-		}
-		
-		//JS_SetContextThread(asc->cx);
-		//JS_BeginRequest(asc->cx);
-			
-			JS_SetOptions(asc->cx, JSOPTION_VAROBJFIX | JSOPTION_JIT);
-			JS_SetVersion(asc->cx, JSVERSION_LATEST);
-			JS_SetErrorReporter(asc->cx, reportError);
-
-			asc->global = JS_NewObject(asc->cx, &global_class, NULL, NULL);
-			
-			JS_InitStandardClasses(asc->cx, asc->global);
-			
-			/* define the Ape Object */
-			ape_sm_define_ape(asc, gcx, g_ape);
-
-			asc->bytecode = JS_CompileFile(asc->cx, asc->global, asc->filename);
-			
-			if (asc->bytecode != NULL) {
-				asc->scriptObj = JS_NewScriptObject(asc->cx, asc->bytecode);
-
-				/* Adding to the root (prevent the script to be GC collected) */
-				JS_AddNamedRoot(asc->cx, &asc->scriptObj, asc->filename);
-
-				/* put the Ape table on the script structure */
-				asc->g_ape = g_ape;
-
-				asc->callbacks.head = NULL;
-				asc->callbacks.foot = NULL;
-				
-				/* Run the script */
-				JS_ExecuteScript(asc->cx, asc->global, asc->bytecode, &rval);
-				
-			}
-		//JS_EndRequest(asc->cx);
-		//JS_ClearContextThread(asc->cx);
-
-		if (asc->bytecode == NULL) {
-			/* cleaning memory */
-		} else {
-			asc->next = asr->scripts;
-			asr->scripts = asc;
-		}
+	if (asc->cx == NULL) {
+		free(asc->filename);
+		free(asc);
+		return;
 	}
-	globfree(&globbuf);
+
+	JS_SetOptions(asc->cx, JSOPTION_VAROBJFIX | JSOPTION_JIT | JSOPTION_METHODJIT);
+	JS_SetVersion(asc->cx, JSVERSION_LATEST);
+	JS_SetErrorReporter(asc->cx, reportError);
+
+	asc->global = JS_NewCompartmentAndGlobalObject(asc->cx, &global_class, NULL);
+
+	JS_InitStandardClasses(asc->cx, asc->global);
+
+	/* define the Ape Object */
+	ape_sm_define_ape(asc, gcx, g_ape);
+
+	asc->bytecode = JS_CompileFile(asc->cx, asc->global, asc->filename);
+
+	if (asc->bytecode != NULL) {
+		/* put the Ape table on the script structure */
+		asc->g_ape = g_ape;
+
+		asc->callbacks.head = NULL;
+		asc->callbacks.foot = NULL;
 	
+		/* Run the script */
+		JS_ExecuteScript(asc->cx, asc->global, asc->bytecode, &rval);
+	
+	}
+
+	if (asc->bytecode == NULL) {
+		ape_log(APE_INFO, __FILE__, __LINE__, g_ape, 
+			"JavaScript : Cannot open main.ape.js");
+		return;
+	} else {
+		asc->next = asr->scripts;
+		asr->scripts = asc;
+	}
+
 	APE_JS_EVENT("init", 0, NULL);
 	
 }
 
 static void free_module(acetables *g_ape) // Called when module is unloaded
 {
-	// TODO free other allocated objects
 
 	ape_sm_compiled *asc = ASMR->scripts;
 	ape_sm_compiled *prev_asc;
+	ape_sm_callback *cb;
+
+	APE_JS_EVENT("stop", 0, NULL);
 
 	while (asc != NULL) {
 		free(asc->filename);
+		for (cb = asc->callbacks.head; cb; cb = cb->next) {
+			JS_RemoveValueRoot(asc->cx, &cb->func);
+		}
 		JS_DestroyContext(asc->cx);
 		prev_asc = asc;
 		asc = asc->next;
 		free(prev_asc);
 	}
 
-	JS_DestroyContext(ASMC);
+	//JS_DestroyContext(ASMC);
 	JS_DestroyRuntime(ASMR->runtime);
 
 	free(ASMR);
@@ -3187,7 +3515,7 @@ static USERS *ape_cb_allocateuser(ape_socket *client, const char *host, const ch
 
 		/* Store the JSObject into a private properties of the user */
 		jsobj = add_property(&u->properties, "jsobj", user, EXTEND_POINTER, EXTEND_ISPRIVATE);
-		JS_AddRoot(gcx, &jsobj->val); /* add user object to the gc root */
+		JS_AddObjectRoot(gcx, (JSObject **)&jsobj->val); /* add user object to the gc root */
 
 		JS_SetPrivate(gcx, user, u);
 		
@@ -3216,7 +3544,7 @@ static void ape_cb_del_user(USERS *user, int istmp, acetables *g_ape)
 	jsobj = get_property(user->properties, "jsobj");
 	
 	JS_SetPrivate(gcx, jsobj->val, (void *)NULL);
-	JS_RemoveRoot(gcx, &jsobj->val);
+	JS_RemoveObjectRoot(gcx, (JSObject **)&jsobj->val);
 
 	deluser(user, g_ape);
 }
@@ -3243,7 +3571,7 @@ static CHANNEL *ape_cb_mkchan(char *name, int flags, acetables *g_ape)
 		}
 		
 		jsobj = add_property(&chan->properties, "jsobj", js_channel, EXTEND_POINTER, EXTEND_ISPRIVATE);
-		JS_AddRoot(gcx, &jsobj->val);
+		JS_AddObjectRoot(gcx, (JSObject **)&jsobj->val);
 
 		pipe = OBJECT_TO_JSVAL(get_pipe_object(NULL, chan->pipe, gcx, g_ape));
 		JS_SetProperty(gcx, js_channel, "pipe", &pipe);
@@ -3272,7 +3600,7 @@ static void ape_cb_rmchan(CHANNEL *chan, acetables *g_ape)
 	jsobj = get_property(chan->properties, "jsobj");
 	
 	JS_SetPrivate(gcx, jsobj->val, (void *)NULL);
-	JS_RemoveRoot(gcx, &jsobj->val);
+	JS_RemoveObjectRoot(gcx, (JSObject **)&jsobj->val);
 	
 	pipe = chan->pipe->data;
 	JS_SetPrivate(gcx, pipe, (void *)NULL);
@@ -3321,7 +3649,7 @@ static void ape_cb_addsubuser(subuser *sub, acetables *g_ape)
 	}
 	
 	jsobj = add_property(&sub->properties, "jsobj", subjs, EXTEND_POINTER, EXTEND_ISPRIVATE);
-	JS_AddRoot(gcx, &jsobj->val);
+	JS_AddObjectRoot(gcx, (JSObject **)&jsobj->val);
 	
 	JS_SetPrivate(gcx, subjs, sub);
 	
@@ -3335,7 +3663,7 @@ static void ape_cb_delsubuser(subuser *sub, acetables *g_ape)
 	jsobj = get_property(sub->properties, "jsobj");
 	
 	JS_SetPrivate(gcx, jsobj->val, (void *)NULL);
-	JS_RemoveRoot(gcx, &jsobj->val);
+	JS_RemoveObjectRoot(gcx, (JSObject **)&jsobj->val);
 	
 }
 
