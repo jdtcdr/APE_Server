@@ -1223,15 +1223,21 @@ APE_JS_NATIVE(apemysql_sm_query)
 
 APE_JS_NATIVE(apelogfile_constructor)
 //{
+	JSString *input_path = NULL;
 	char *path;
 	char *value;
 	unsigned int val_len;
-	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
+	JSObject *obj = JS_NewObjectForConstructor(cx, vpn);
 	struct _ape_logfile_data *myhandle;
 	
-	if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "s", &path)) {
+	if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "S", &input_path)) {
 		return JS_FALSE;
 	}
+
+        path = JS_EncodeString(cx, input_path);
+        if (NULL == path) {
+	        return JS_FALSE;
+        }
 
         ape_log(APE_DEBUG, __FILE__, __LINE__, g_ape, 
 		"LogFile : constructor called with '%s'", path);
@@ -1253,7 +1259,7 @@ APE_JS_NATIVE(apelogfile_constructor)
 		return JS_FALSE;
 	}
 
-	myhandle = xmalloc(sizeof(*myhandle));
+        myhandle = JS_malloc(cx, sizeof(*myhandle));
 
 	myhandle->fp = NULL;
 
@@ -1272,10 +1278,11 @@ APE_JS_NATIVE(apelogfile_constructor)
 		}
 		myhandle->filename = path;
 	} else {
-		myhandle->filename = xmalloc(val_len + strlen(path) + 2*sizeof(*value));
+	        myhandle->filename = JS_malloc(cx, val_len + strlen(path) + 2*sizeof(*value));
 		strncpy(myhandle->filename, value, val_len);
 		myhandle->filename[val_len] = '/'; // force to '/'
 		strcpy(myhandle->filename+val_len+1, path);
+		JS_free(cx, path);
 	}
 
         myhandle->fp = fopen(myhandle->filename, "a");
@@ -1285,29 +1292,40 @@ APE_JS_NATIVE(apelogfile_constructor)
 
 	JS_SetPrivate(cx, obj, myhandle);
 	
+        JS_SET_RVAL(cx, vpn, OBJECT_TO_JSVAL(obj));
+
 	return JS_TRUE;
 }
 
 APE_JS_NATIVE(apelogfile_log)
 //{
+        JSString * input_msg;
         char * msg;
 	struct _ape_logfile_data *myhandle;
 	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
 	
 	if ((myhandle = JS_GetPrivate(cx, obj)) == NULL) {
-		return JS_TRUE;
+                JS_ReportError(cx, "Internal error : private state lost");
+		return JS_FALSE;
 	}
 
-        if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "s", &msg)) {
-		return JS_TRUE;
+        if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "S", &input_msg)) {
+		return JS_FALSE;
 	}
 
         if (myhandle->fp == NULL) {
-		return JS_TRUE;
+	        JS_ReportError(cx, "LogFile is closed");
+		return JS_FALSE;
 	}
 
+        msg = JS_EncodeString(cx, input_msg);
+        if (NULL == msg) {
+	        return JS_FALSE;
+        }
+
         fwrite(msg, sizeof(*msg), strlen(msg), myhandle->fp);
-        fwrite("\n", sizeof(char), 1, myhandle->fp);
+
+        JS_free(cx, msg);
 
         return JS_TRUE;
 }
@@ -1318,7 +1336,8 @@ APE_JS_NATIVE(apelogfile_flush)
 	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
 	
 	if ((myhandle = JS_GetPrivate(cx, obj)) == NULL) {
-		return JS_TRUE;
+                JS_ReportError(cx, "Internal error : private state lost");
+		return JS_FALSE;
 	}
 
         if (myhandle->fp != NULL) {
@@ -1354,7 +1373,11 @@ static void apelogfile_finalize(JSContext *cx, JSObject *obj)
 			fclose(myhandle->fp);
 		}
 		myhandle->fp = NULL;
-		free(myhandle);
+		if (myhandle->filename != NULL) {
+		        JS_free(cx, myhandle->filename);
+			myhandle->filename = NULL;
+		}
+		JS_free(cx, myhandle);
 		JS_SetPrivate(cx, obj, NULL);
 	}
 }
