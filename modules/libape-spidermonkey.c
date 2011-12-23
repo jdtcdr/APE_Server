@@ -283,7 +283,7 @@ static JSClass cmdresponse_class = {
 
 static JSClass logfile_class = {
 	"LogFile", JSCLASS_HAS_PRIVATE,
-	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_PropertyStub,
+	    JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
 	    JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, apelogfile_finalize,
 	    JSCLASS_NO_OPTIONAL_MEMBERS
 };
@@ -1226,10 +1226,10 @@ APE_JS_NATIVE(apelogfile_constructor)
 	char *path;
 	char *value;
 	unsigned int val_len;
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
 	struct _ape_logfile_data *myhandle;
 	
-	if (!JS_ConvertArguments(cx, 1, argv, "s", &path)) {
-		*rval = JS_FALSE;
+	if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "s", &path)) {
 		return JS_FALSE;
 	}
 
@@ -1240,7 +1240,6 @@ APE_JS_NATIVE(apelogfile_constructor)
         if (strchr(path, '.') != NULL) {
 		ape_log(APE_ERR, __FILE__, __LINE__, g_ape, 
 			"LogFile : Illegal . character in logfile name");
-		*rval = JS_FALSE;
 		return JS_FALSE;
 	}
 
@@ -1251,7 +1250,6 @@ APE_JS_NATIVE(apelogfile_constructor)
         if (value == NULL) {
 		ape_log(APE_ERR, __FILE__, __LINE__, g_ape, 
 			"LogFile : Failed to initialize because log writing has not been enabled in server configuration");
-		*rval = JS_FALSE;
 		return JS_FALSE;
 	}
 
@@ -1270,7 +1268,6 @@ APE_JS_NATIVE(apelogfile_constructor)
 		    path[val_len] != '/') {
 		        ape_log(APE_ERR, __FILE__, __LINE__, g_ape, 
 			"LogFile : Failed to initialize because absolute path given does not match directory authorized in server configuration");
-			*rval = JS_FALSE;
 			return JS_FALSE;
 		}
 		myhandle->filename = path;
@@ -1283,7 +1280,6 @@ APE_JS_NATIVE(apelogfile_constructor)
 
         myhandle->fp = fopen(myhandle->filename, "a");
         if (myhandle->fp == NULL) {
-		*rval = JS_FALSE;
 		return JS_FALSE;
 	}
 
@@ -1296,13 +1292,13 @@ APE_JS_NATIVE(apelogfile_log)
 //{
         char * msg;
 	struct _ape_logfile_data *myhandle;
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
 	
 	if ((myhandle = JS_GetPrivate(cx, obj)) == NULL) {
 		return JS_TRUE;
 	}
 
-	if (!JS_ConvertArguments(cx, argc, argv, "s", &msg)) {
-		*rval = JS_FALSE;
+        if (!JS_ConvertArguments(cx, 1, JS_ARGV(cx, vpn), "s", &msg)) {
 		return JS_TRUE;
 	}
 
@@ -1319,6 +1315,7 @@ APE_JS_NATIVE(apelogfile_log)
 APE_JS_NATIVE(apelogfile_flush) 
 //{
 	struct _ape_logfile_data *myhandle;
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
 	
 	if ((myhandle = JS_GetPrivate(cx, obj)) == NULL) {
 		return JS_TRUE;
@@ -1334,6 +1331,7 @@ APE_JS_NATIVE(apelogfile_flush)
 APE_JS_NATIVE(apelogfile_close)
 //{
 	struct _ape_logfile_data *myhandle;
+	JSObject *obj = JS_THIS_OBJECT(cx, vpn);
 	
 	if ((myhandle = JS_GetPrivate(cx, obj)) == NULL) {
 		return JS_TRUE;
@@ -1440,9 +1438,9 @@ static JSFunctionSpec apepipecustom_funcs[] = {
 };
 
 static JSFunctionSpec apelogfile_funcs[] = {
-	JS_FS("log", apelogfile_log, 1, 0, 0),
-	JS_FS("flush", apelogfile_flush, 0, 0, 0),
-	JS_FS("close", apelogfile_close, 0, 0, 0),
+	JS_FS("log", apelogfile_log, 1, 0),
+	JS_FS("flush", apelogfile_flush, 0, 0),
+	JS_FS("close", apelogfile_close, 0, 0),
 	JS_FS_END
 };
 
@@ -3161,7 +3159,7 @@ static JSFunctionSpec sha1_funcs[] = {
 
 static void ape_sm_define_ape(ape_sm_compiled *asc, JSContext *gcx, acetables *g_ape)
 {
-	JSObject *obj, *b64, *sha1, *sockclient, *sockserver, *custompipe, *user, *channel, *subuser;
+        JSObject *obj, *b64, *sha1, *sockclient, *sockserver, *custompipe, *user, *channel, *subuser, *logfile;
 	#ifdef _USE_MYSQL
 	JSObject *jsmysql;
 	#endif
